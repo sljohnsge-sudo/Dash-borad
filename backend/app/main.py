@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import init_db
-from app.routers import health, reports, seed, budget, dashboard_fy, custom_dashboard
+from app.routers import health, reports, seed, budget, dashboard_fy, custom_dashboard, auth, users, division_mappings
 
 app = FastAPI(
     title="George Steuart Health Executive Dashboard API",
@@ -21,6 +21,8 @@ app.add_middleware(
 @app.on_event("startup")
 def startup_db():
     init_db()
+    auth.init_users_table()
+    division_mappings.init_division_mappings_table()
 
 # Include Routers
 app.include_router(health.router)
@@ -29,6 +31,9 @@ app.include_router(seed.router)
 app.include_router(budget.router)
 app.include_router(dashboard_fy.router)
 app.include_router(custom_dashboard.router)
+app.include_router(auth.router)
+app.include_router(users.router)
+app.include_router(division_mappings.router)
 
 if __name__ == "__main__":
     import uvicorn
