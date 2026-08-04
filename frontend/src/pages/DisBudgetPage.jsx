@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchDisBudget } from '../services/api';
 import KpiCard from '../components/KpiCard';
 import { Search, Target, Award, Filter, ChevronLeft, ChevronRight, AlertCircle, Calendar } from 'lucide-react';
+import { ExcelColHeader, ExcelRowNum, ExcelRowHeader } from '../components/ExcelTableHeader';
 
 const DIS_MONTH_OPTIONS = [
   { num: 4, label: 'April 2026' },
@@ -213,19 +214,20 @@ const DisBudgetPage = () => {
       <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto', maxHeight: '600px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.825rem', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg-hover)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-main)', fontWeight: 700, position: 'sticky', top: 0, zIndex: 10 }}>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>Month</th>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>Product ID</th>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap', minWidth: '220px' }}>Product</th>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>Division Name</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>Primary Target</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>Primary Actual</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>RD Target</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>RD Actual</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>Pri-%</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap' }}>RD-%</th>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>QTR</th>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+              <tr>
+                <ExcelRowHeader />
+                <ExcelColHeader col="B" label="Month" />
+                <ExcelColHeader col="C" label="Product ID" />
+                <ExcelColHeader col="D" label="Product" minWidth="220px" />
+                <ExcelColHeader col="E" label="Division Name" />
+                <ExcelColHeader col="F" label="Primary Target" align="right" />
+                <ExcelColHeader col="G" label="Primary Actual" align="right" />
+                <ExcelColHeader col="H" label="RD Target" align="right" />
+                <ExcelColHeader col="I" label="RD Actual" align="right" />
+                <ExcelColHeader col="J" label="Pri-%" align="right" />
+                <ExcelColHeader col="K" label="RD-%" align="right" />
+                <ExcelColHeader col="L" label="QTR" />
               </tr>
             </thead>
             <tbody>
@@ -243,6 +245,7 @@ const DisBudgetPage = () => {
                     onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
+                    <ExcelRowNum num={(page - 1) * limit + idx + 1} />
                     <td style={{ padding: '0.65rem 1rem', color: 'var(--text-subtle)', whiteSpace: 'nowrap' }}>
                       {row.month ? row.month.split(' ')[0] : '-'}
                     </td>

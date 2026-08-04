@@ -6,6 +6,7 @@ import TotalBudgetPage from './pages/TotalBudgetPage';
 import DisBudgetPage from './pages/DisBudgetPage';
 import InvoiceOutputPage from './pages/InvoiceOutputPage';
 import OutstandingOutputPage from './pages/OutstandingOutputPage';
+import DashboardCreatePage from './pages/DashboardCreatePage';
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
         <Route path="dis-budget" element={<DisBudgetPage />} />
         <Route path="invoice-output" element={<InvoiceOutputPage />} />
         <Route path="outstanding-output" element={<OutstandingOutputPage />} />
+        <Route path="dashboard-create" element={<DashboardCreatePage />} />
         <Route path="*" element={<Navigate to="/dashboard-fy" replace />} />
       </Route>
     </Routes>

@@ -8,16 +8,18 @@ import {
   FileText,
   Truck,
   ShieldCheck, 
-  X
+  X,
+  LayoutGrid
 } from 'lucide-react';
 
 const Sidebar = ({ mobileOpen, setMobileOpen }) => {
   const menuItems = [
-    { path: '/dashboard-fy', label: 'Dashboard FY', sub: 'Blank Dashboard Overview', icon: LayoutDashboard },
+    { path: '/dashboard-fy', label: 'Dashboard FY', sub: 'Executive Dashboard Overview', icon: LayoutDashboard },
     { path: '/total-budget', label: 'Total Budget', sub: 'total_budget (649 records)', icon: Calculator },
     { path: '/dis-budget', label: 'Dis Budget', sub: 'dis_budget (9,644 records)', icon: PieChart },
     { path: '/invoice-output', label: 'Invoice Output Report', sub: 'invoice_output (19,046 records)', icon: FileText },
     { path: '/outstanding-output', label: 'Outstanding Output Report', sub: 'outstanding_output (170 records)', icon: Truck },
+    { path: '/dashboard-create', label: 'Dashboard Create Page', sub: 'Studio — Build custom charts', icon: LayoutGrid, divider: true },
   ];
 
   const handleClose = () => {
@@ -75,6 +77,10 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
           {menuItems.map((item) => {
             const Icon = item.icon;
             return (
+              <React.Fragment key={item.path}>
+              {item.divider && (
+                <div style={{ height: '1px', background: 'var(--border-color)', margin: '0.25rem 0' }} />
+              )}
               <NavLink
                 key={item.path}
                 to={item.path}
@@ -116,6 +122,7 @@ const Sidebar = ({ mobileOpen, setMobileOpen }) => {
                   </>
                 )}
               </NavLink>
+              </React.Fragment>
             );
           })}
         </nav>

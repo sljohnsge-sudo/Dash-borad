@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { fetchTotalBudget } from '../services/api';
 import KpiCard from '../components/KpiCard';
 import { Search, DollarSign, Package, Layers, ChevronLeft, ChevronRight, AlertCircle, Calendar } from 'lucide-react';
+import { ExcelColHeader, ExcelRowNum, ExcelRowHeader } from '../components/ExcelTableHeader';
 
 const MONTH_OPTIONS = [
   { key: 'april', label: 'April 2026' },
@@ -177,28 +178,28 @@ const TotalBudgetPage = () => {
       <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto', maxHeight: '600px' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.825rem', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ background: 'var(--bg-hover)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-main)', fontWeight: 700, position: 'sticky', top: 0, zIndex: 10 }}>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>#</th>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>Cost Center</th>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>Sales Group</th>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>Range</th>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>Part No</th>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap', minWidth: '220px' }}>Product (SKU)</th>
-                <th style={{ padding: '0.75rem 1rem', whiteSpace: 'nowrap' }}>Pack</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'april' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>April</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'may' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>May</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'june' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>June</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'july' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>July</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'august' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>August</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'september' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>September</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'october' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>October</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'november' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>November</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'december' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>December</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'january' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>January</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'february' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>February</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: activeMonth === 'march' ? 'rgba(200, 16, 46, 0.1)' : 'transparent' }}>March</th>
-                <th style={{ padding: '0.75rem 1rem', textAlign: 'right', whiteSpace: 'nowrap', background: 'rgba(200, 16, 46, 0.08)', color: 'var(--gsh-red)' }}>Total</th>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+              <tr>
+                <ExcelRowHeader />
+                <ExcelColHeader col="C" label="Cost Center" />
+                <ExcelColHeader col="D" label="Sales Group" />
+                <ExcelColHeader col="E" label="Range" />
+                <ExcelColHeader col="F" label="Part No" />
+                <ExcelColHeader col="G" label="Product (SKU)" minWidth="220px" />
+                <ExcelColHeader col="H" label="Pack" />
+                <ExcelColHeader col="I" label="April" align="right" style={{ background: activeMonth === 'april' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="J" label="May" align="right" style={{ background: activeMonth === 'may' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="K" label="June" align="right" style={{ background: activeMonth === 'june' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="L" label="July" align="right" style={{ background: activeMonth === 'july' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="M" label="August" align="right" style={{ background: activeMonth === 'august' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="N" label="September" align="right" style={{ background: activeMonth === 'september' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="O" label="October" align="right" style={{ background: activeMonth === 'october' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="P" label="November" align="right" style={{ background: activeMonth === 'november' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="Q" label="December" align="right" style={{ background: activeMonth === 'december' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="R" label="January" align="right" style={{ background: activeMonth === 'january' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="S" label="February" align="right" style={{ background: activeMonth === 'february' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="T" label="March" align="right" style={{ background: activeMonth === 'march' ? 'rgba(200,16,46,0.08)' : undefined }} />
+                <ExcelColHeader col="U" label="Total" align="right" />
               </tr>
             </thead>
             <tbody>
@@ -216,7 +217,7 @@ const TotalBudgetPage = () => {
                     onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-hover)'}
                     onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                   >
-                    <td style={{ padding: '0.65rem 1rem', color: 'var(--text-subtle)' }}>{row.s_no || row.id}</td>
+                    <ExcelRowNum num={(page - 1) * limit + idx + 1} />
                     <td style={{ padding: '0.65rem 1rem', fontWeight: 600 }}>{row.cost_center || '-'}</td>
                     <td style={{ padding: '0.65rem 1rem' }}>{row.sales_group || '-'}</td>
                     <td style={{ padding: '0.65rem 1rem' }}>{row.range_name || '-'}</td>
