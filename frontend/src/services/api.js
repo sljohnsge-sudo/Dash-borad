@@ -24,7 +24,46 @@ export const checkDatabaseHealth = async () => {
   }
 };
 
-// 1. Customer Invoice Lines (108k+ records, paginated)
+// Executive Dashboard FY Overview API
+export const fetchDashboardFyOverview = async (month = 'july') => {
+  try {
+    const response = await api.get('/reports/dashboard-fy-overview', {
+      params: { month }
+    });
+    return response.data;
+  } catch (error) {
+    console.warn('API error fetching dashboard FY overview:', error);
+    return null;
+  }
+};
+
+// 1. Total Budget (from Total Budget.xlsx sheet)
+export const fetchTotalBudget = async (page = 1, limit = 10, search = '', month = 'august') => {
+  try {
+    const response = await api.get('/reports/total-budget', {
+      params: { page, limit, search, month }
+    });
+    return response.data;
+  } catch (error) {
+    console.warn('API error fetching total budget:', error);
+    return null;
+  }
+};
+
+// 2. Dis Budget (from Dis Budget.xlsx sheet)
+export const fetchDisBudget = async (page = 1, limit = 10, search = '', division = '', qtr = '', month_num = 8) => {
+  try {
+    const response = await api.get('/reports/dis-budget', {
+      params: { page, limit, search, division, qtr, month_num }
+    });
+    return response.data;
+  } catch (error) {
+    console.warn('API error fetching dis budget:', error);
+    return null;
+  }
+};
+
+// 3. Customer Invoice Lines (108k+ records, paginated)
 export const fetchCustomerInvoiceLines = async (page = 1, limit = 50, search = '', company = '') => {
   try {
     const response = await api.get('/reports/customer-invoice-lines', {
@@ -37,7 +76,7 @@ export const fetchCustomerInvoiceLines = async (page = 1, limit = 50, search = '
   }
 };
 
-// 2. Invoiced Sales (Divasa / GSHD)
+// 4. Invoiced Sales (Divasa / GSHD)
 export const fetchInvoicedSales = async (search = '') => {
   try {
     const response = await api.get('/reports/invoiced-sales', {
@@ -50,7 +89,7 @@ export const fetchInvoicedSales = async (search = '') => {
   }
 };
 
-// 3. Outstanding Orders (Distributor Reserved Sales)
+// 5. Outstanding Orders (Distributor Reserved Sales)
 export const fetchOutstandingOrders = async (search = '') => {
   try {
     const response = await api.get('/reports/outstanding-orders', {
@@ -63,7 +102,7 @@ export const fetchOutstandingOrders = async (search = '') => {
   }
 };
 
-// 4. Reserved Sales Summary (GSH1N GSHD)
+// 6. Reserved Sales Summary (GSH1N GSHD)
 export const fetchReservedSalesSummary = async () => {
   try {
     const response = await api.get('/reports/reserved-sales-summary');
@@ -74,7 +113,7 @@ export const fetchReservedSalesSummary = async () => {
   }
 };
 
-// 5. Invoice Output
+// 7. Invoice Output
 export const fetchInvoiceOutput = async (page = 1, limit = 50, search = '') => {
   try {
     const response = await api.get('/reports/invoice-output', {
@@ -87,7 +126,7 @@ export const fetchInvoiceOutput = async (page = 1, limit = 50, search = '') => {
   }
 };
 
-// 6. Outstanding Output
+// 8. Outstanding Output
 export const fetchOutstandingOutput = async (search = '') => {
   try {
     const response = await api.get('/reports/outstanding-output', {
