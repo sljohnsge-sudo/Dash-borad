@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+.Python
+.venv/
+venv/
+env/
+
+# Environment files
+backend/.env
+*.env
+
+# Node
+node_modules/
+frontend/dist/
+frontend/.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Excel uploads (not needed in repo)
+exsels/*.xlsx
+exsels/*.xls
+
+# Logs
+*.log
