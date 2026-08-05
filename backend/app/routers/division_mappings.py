@@ -100,18 +100,7 @@ DEFAULT_MAPPINGS = [
     ("(blank)", "B BRAUN 3PL"),
     ("(blank)", "COLLOMBO"),
     ("(blank)", "DIAGNOSTIC"),
-    ("(blank)", "MADIWELA"),
-    ("GLUCOMETER", "DIAGNOSTIC"),
-    ("DVAN", "LACTONOVA"),
-    ("SCS-LOCAL", "SRI CHIN"),
-    ("BIOTEST", "DIAGNOSTIC"),
-    ("UL-CEN", "UL-CEN"),
-    ("STRIPS & C", "DIAGNOSTIC"),
-    ("SD BIO", "DIAGNOSTIC"),
-    ("ALTAYLAR S", "SUR CONSUMABLES"),
-    ("TAJ SALES", ""),
-    ("ARRB7", "ARROWIL B7"),
-    ("MEDEQUIP", "DIAGNOSTIC"),
+    ("(blank)", "MADIWELA")
 ]
 
 _db_initialized = False
@@ -120,20 +109,23 @@ def init_division_mappings_table():
     global _db_initialized
     if _db_initialized:
         return
+
     conn = get_db_connection()
     with conn.cursor() as cursor:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS division_mappings (
                 id INT AUTO_INCREMENT PRIMARY KEY,
-                sales_group VARCHAR(100) NOT NULL,
-                range_name VARCHAR(100) NOT NULL,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-                UNIQUE KEY uq_sg_rn (sales_group, range_name)
-            );
+                sales_group VARCHAR(150) NOT NULL,
+                range_name VARCHAR(150) NOT NULL,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                UNIQUE KEY uk_sales_group (sales_group, range_name)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
         """)
+
         cursor.execute("SELECT COUNT(*) as cnt FROM division_mappings;")
-        cnt = cursor.fetchone()["cnt"]
-        if cnt == 0:
+        count = cursor.fetchone()["cnt"]
+
+        if count == 0:
             cursor.executemany("""
                 INSERT IGNORE INTO division_mappings (sales_group, range_name)
                 VALUES (%s, %s);
@@ -150,25 +142,125 @@ def on_startup():
         print(f"Error initializing division_mappings table: {e}")
 
 
-@router.get("")
-def list_division_mappings(search: Optional[str] = Query(None)):
+@router.get("/stats")
+def get_mapping_stats():
     init_division_mappings_table()
     conn = get_db_connection()
     with conn.cursor() as cursor:
-        if search:
-            like_str = f"%{search}%"
+        # Total unique Sales Groups in total_budget
+        cursor.execute("""
+            SELECT COUNT(DISTINCT TRIM(sales_group)) as cnt 
+            FROM total_budget 
+            WHERE sales_group IS NOT NULL AND TRIM(sales_group) != '';
+        """)
+        tb_sg_count = cursor.fetchone()['cnt'] or 0
+
+        # Total unique Ranges in division_mappings
+        cursor.execute("""
+            SELECT COUNT(DISTINCT TRIM(range_name)) as cnt 
+            FROM division_mappings 
+            WHERE range_name IS NOT NULL AND TRIM(range_name) != '';
+        """)
+        div_range_count = cursor.fetchone()['cnt'] or 0
+
+        # Mapped count vs Unmapped count in total_budget
+        cursor.execute("""
+            SELECT 
+                COUNT(DISTINCT CASE WHEN m.sales_group IS NOT NULL THEN b.sales_group END) as mapped_cnt,
+                COUNT(DISTINCT CASE WHEN m.sales_group IS NULL THEN b.sales_group END) as unmapped_cnt
+            FROM total_budget b
+            LEFT JOIN division_mappings m ON LOWER(TRIM(b.sales_group)) = LOWER(TRIM(m.sales_group))
+            WHERE b.sales_group IS NOT NULL AND TRIM(b.sales_group) != '';
+        """)
+        m_row = cursor.fetchone()
+        mapped_cnt = m_row['mapped_cnt'] or 0
+        unmapped_cnt = m_row['unmapped_cnt'] or 0
+
+        # Unmapped Sales Groups list
+        cursor.execute("""
+            SELECT DISTINCT TRIM(b.sales_group) as unmapped_sg, TRIM(b.range_name) as target_range
+            FROM total_budget b
+            LEFT JOIN division_mappings m ON LOWER(TRIM(b.sales_group)) = LOWER(TRIM(m.sales_group))
+            WHERE m.sales_group IS NULL AND b.sales_group IS NOT NULL AND TRIM(b.sales_group) != '';
+        """)
+        unmapped_list = cursor.fetchall()
+
+    conn.close()
+    return {
+        "status": "success",
+        "total_sales_groups": tb_sg_count,
+        "total_ranges": div_range_count,
+        "mapped_count": mapped_cnt,
+        "unmapped_count": unmapped_cnt,
+        "unmapped_list": unmapped_list
+    }
+
+
+@router.post("/sync-from-budget")
+def sync_mappings_from_budget():
+    init_division_mappings_table()
+    conn = get_db_connection()
+    synced_count = 0
+    with conn.cursor() as cursor:
+        # Fetch all distinct (sales_group, range_name) pairs from total_budget
+        cursor.execute("""
+            SELECT DISTINCT TRIM(sales_group) as s_grp, TRIM(range_name) as r_name
+            FROM total_budget
+            WHERE sales_group IS NOT NULL AND TRIM(sales_group) != ''
+              AND range_name IS NOT NULL AND TRIM(range_name) != '';
+        """)
+        tb_pairs = cursor.fetchall()
+
+        for p in tb_pairs:
+            s_grp = p['s_grp']
+            r_name = p['r_name']
             cursor.execute("""
-                SELECT id, sales_group, range_name, DATE_FORMAT(updated_at, '%%Y-%%m-%%d %%H:%%i') as updated_at
-                FROM division_mappings
-                WHERE sales_group LIKE %s OR range_name LIKE %s
-                ORDER BY id ASC;
-            """, (like_str, like_str))
-        else:
-            cursor.execute("""
-                SELECT id, sales_group, range_name, DATE_FORMAT(updated_at, '%%Y-%%m-%%d %%H:%%i') as updated_at
-                FROM division_mappings
-                ORDER BY id ASC;
-            """)
+                INSERT INTO division_mappings (sales_group, range_name)
+                VALUES (%s, %s)
+                ON DUPLICATE KEY UPDATE range_name = VALUES(range_name);
+            """, (s_grp, r_name))
+            synced_count += cursor.rowcount
+
+    conn.close()
+    return {
+        "status": "success",
+        "message": f"Successfully auto-synced {len(tb_pairs)} mappings from total_budget database table!",
+        "total_synced": len(tb_pairs)
+    }
+
+
+@router.get("")
+def list_division_mappings(
+    search: Optional[str] = Query(None),
+    year: Optional[str] = Query(None)
+):
+    init_division_mappings_table()
+    conn = get_db_connection()
+    where_clauses = []
+    params = []
+
+    if search:
+        where_clauses.append("(b.sales_group LIKE %s OR b.range_name LIKE %s OR b.part_no LIKE %s OR b.product_sku LIKE %s)")
+        like_str = f"%{search}%"
+        params.extend([like_str, like_str, like_str, like_str])
+
+    where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    with conn.cursor() as cursor:
+        cursor.execute(f"""
+            SELECT 
+                b.id as budget_id,
+                COALESCE(m.id, b.id) as id,
+                TRIM(b.sales_group) as sales_group,
+                TRIM(b.range_name) as range_name,
+                TRIM(COALESCE(b.part_no, '')) as part_no,
+                TRIM(COALESCE(b.product_sku, '')) as product_sku,
+                DATE_FORMAT(COALESCE(m.updated_at, NOW()), '%%Y-%%m-%%d %%H:%%i') as updated_at
+            FROM total_budget b
+            LEFT JOIN division_mappings m ON LOWER(TRIM(b.sales_group)) = LOWER(TRIM(m.sales_group))
+            {where_sql}
+            ORDER BY b.id ASC;
+        """, params)
         rows = cursor.fetchall()
     conn.close()
     return {"status": "success", "total": len(rows), "data": rows}

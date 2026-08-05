@@ -12,9 +12,13 @@ import TotalBudgetPage from './pages/TotalBudgetPage';
 import DisBudgetPage from './pages/DisBudgetPage';
 import InvoiceOutputPage from './pages/InvoiceOutputPage';
 import OutstandingOutputPage from './pages/OutstandingOutputPage';
-import DashboardCreatePage from './pages/DashboardCreatePage';
+import UploadAnnualBudgetPage from './pages/UploadAnnualBudgetPage';
+import UploadDisBudgetPage from './pages/UploadDisBudgetPage';
+import UploadAxientaDataPage from './pages/UploadAxientaDataPage';
 import ManageUsersPage from './pages/ManageUsersPage';
 import MapDivisionsPage from './pages/MapDivisionsPage';
+import InvoiceSyncPage from './pages/InvoiceSyncPage';
+import OutstandingSyncPage from './pages/OutstandingSyncPage';
 
 // Guard requiring user to be logged in
 const RequireAuth = ({ children }) => {
@@ -63,7 +67,16 @@ function AppRoutes() {
         <Route path="invoice-output" element={<RequireAdmin><InvoiceOutputPage /></RequireAdmin>} />
         <Route path="outstanding-output" element={<RequireAdmin><OutstandingOutputPage /></RequireAdmin>} />
         <Route path="map-divisions" element={<RequireAdmin><MapDivisionsPage /></RequireAdmin>} />
-        <Route path="dashboard-create" element={<RequireAdmin><DashboardCreatePage /></RequireAdmin>} />
+        
+        {/* Oracle IFS Dedicated Sync Routes */}
+        <Route path="sync-invoice" element={<RequireAdmin><InvoiceSyncPage /></RequireAdmin>} />
+        <Route path="sync-outstanding" element={<RequireAdmin><OutstandingSyncPage /></RequireAdmin>} />
+        
+        {/* DATA UPLOAD Section Routes */}
+        <Route path="upload-annual-budget" element={<RequireAdmin><UploadAnnualBudgetPage /></RequireAdmin>} />
+        <Route path="upload-dis-budget" element={<RequireAdmin><UploadDisBudgetPage /></RequireAdmin>} />
+        <Route path="upload-axienta-data" element={<RequireAdmin><UploadAxientaDataPage /></RequireAdmin>} />
+
         <Route path="admin/users" element={<RequireAdmin><ManageUsersPage /></RequireAdmin>} />
 
         {/* Fallback */}

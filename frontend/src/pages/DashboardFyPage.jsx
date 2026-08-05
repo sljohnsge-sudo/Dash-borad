@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { fetchDashboardFyOverview } from '../services/api';
-import CircularGauge from '../components/common/CircularGauge';
-import { AlertCircle, Calendar, Info, Settings, RefreshCw } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { RefreshCw, Calendar, Info } from 'lucide-react';
+import api from '../services/api';
 
 const MONTH_TABS = [
   { key: 'april', label: 'Apr-26' },
@@ -20,33 +18,85 @@ const MONTH_TABS = [
 ];
 
 const toMn = (val) => {
-  if (val === null || val === undefined || isNaN(val)) return '0.00 Mn';
-  const mn = val / 1_000_000;
-  return `${mn.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Mn`;
+  if (val === undefined || val === null) return '0.0 M';
+  const mn = val / 1000000;
+  return mn.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' M';
 };
 
 const toMnInt = (val) => {
-  if (val === null || val === undefined || isNaN(val)) return '0 Mn';
-  const mn = Math.round(val / 1_000_000);
-  return `${mn.toLocaleString('en-US')} Mn`;
+  if (val === undefined || val === null) return '0 M';
+  const mn = val / 1000000;
+  return Math.round(mn).toLocaleString('en-US') + ' M';
+};
+
+const CircularGauge = ({ percentage, variance, size = 130, activeColor = '#10b981', inactiveColor = 'var(--bg-hover)' }) => {
+  const strokeWidth = 10;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - (Math.min(percentage, 100) / 100) * circumference;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ position: 'relative', width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke="#e2e8f0"
+            strokeWidth={strokeWidth}
+            fill="transparent"
+            strokeDasharray="6 4"
+          />
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            stroke={activeColor}
+            strokeWidth={strokeWidth}
+            fill="transparent"
+            strokeDasharray={circumference}
+            strokeDashoffset={strokeDashoffset}
+            strokeLinecap="round"
+            style={{ transition: 'stroke-dashoffset 0.8s ease' }}
+          />
+        </svg>
+        <div style={{ position: 'absolute', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <span style={{ fontSize: size > 120 ? '1.5rem' : '1.35rem', fontWeight: 900, color: 'var(--text-main)', lineHeight: 1 }}>
+            {percentage}%
+          </span>
+        </div>
+      </div>
+      <div style={{ textAlign: 'center', marginTop: '0.5rem' }}>
+        <div style={{ fontSize: '0.7rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-muted)' }}>
+          VARIANCE
+        </div>
+        <div style={{ fontSize: '0.95rem', fontWeight: 800, color: activeColor }}>
+          {variance}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const DashboardFyPage = () => {
   const [selectedMonth, setSelectedMonth] = useState('july');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const navigate = useNavigate();
+  const [error, setError] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
-    setError(false);
-    const res = await fetchDashboardFyOverview(selectedMonth);
-    if (!res) {
-      setError(true);
-      setData(null);
-    } else {
-      setData(res);
+    setError(null);
+    try {
+      const res = await api.get('/reports/dashboard-fy-overview', {
+        params: { month: selectedMonth }
+      });
+      if (res.data) {
+        setData(res.data);
+      }
+    } catch {
+      setError('Could not connect to live backend server.');
     }
     setLoading(false);
   };
@@ -60,7 +110,7 @@ const DashboardFyPage = () => {
   const db = data?.direct_budget || { target: 338680000, actual: 473690000, pct: 140, variance: 135010000 };
   const dp = data?.dis_pri || { target: 753410000, actual: 779880000, pct: 104, variance: 26470000 };
   const dr = data?.dis_rd || { target: 839740000, actual: 645450000, pct: 77, variance: -194290000 };
-  const an = data?.annual || { target: 1555200000, actual: 5217000000, pct: 335 };
+  const an = data?.annual || { target: 13554000000, actual: 1200681486.76, pct: 9 };
 
   // Max values for bar widths
   const tbMax = Math.max(tb.actual, tb.target) * 1.1;
@@ -74,32 +124,18 @@ const DashboardFyPage = () => {
       
       {/* ─── Header ─── */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
-            Executive Dashboard FY 2026/27 Overview ({data?.month_label || 'July 2026'})
-          </h2>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>
-            Monthly Targets vs Actuals comparing&nbsp;
-            <code style={{ background: 'var(--bg-hover)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>total_budget</code>,&nbsp;
-            <code style={{ background: 'var(--bg-hover)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>dis_budget</code>,&nbsp;
-            <code style={{ background: 'var(--bg-hover)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>invoice_output</code>,&nbsp;
-            <code style={{ background: 'var(--bg-hover)', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>outstanding_output</code>
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-          <button onClick={loadData} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 0.9rem', background: 'var(--bg-hover)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}>
-            <RefreshCw style={{ width: '15px', height: '15px' }} /> Refresh
-          </button>
-          <button onClick={() => navigate('/dashboard-create')} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 1rem', background: 'var(--accent-gradient)', border: 'none', borderRadius: 'var(--radius-sm)', color: '#ffffff', fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(200,16,46,0.25)' }}>
-            <Settings style={{ width: '15px', height: '15px' }} /> Customize Charts
-          </button>
-        </div>
+        <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
+          Dashboard FY 2026/27 Overview ({data?.month_label || 'July 2026'})
+        </h2>
+        <button onClick={loadData} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.55rem 0.9rem', background: 'var(--bg-hover)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer' }}>
+          <RefreshCw style={{ width: '15px', height: '15px' }} /> Refresh
+        </button>
       </div>
 
       {/* ─── Hover Formula Banner ─── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,168,150,0.08)', padding: '0.4rem 0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(0,168,150,0.3)', fontSize: '0.8rem', color: 'var(--gsh-teal)' }}>
         <Info style={{ width: '16px', height: '16px', flexShrink: 0 }} />
-        <span>Hover over any bar to view exact database calculation formula! Click <strong>Customize Charts</strong> to edit formulas.</span>
+        <span>Hover over any bar to view exact database calculation formula!</span>
       </div>
 
       {/* ─── Top 12 Month Selector Bar ─── */}
@@ -137,110 +173,90 @@ const DashboardFyPage = () => {
         })}
       </div>
 
-      {/* ─── Backend Error Alert ─── */}
-      {error && (
-        <div style={{ padding: '1rem 1.25rem', borderRadius: 'var(--radius-sm)', background: 'rgba(200, 16, 46, 0.08)', border: '1px solid rgba(200, 16, 46, 0.3)', display: 'flex', alignItems: 'center', gap: '0.85rem', color: 'var(--gsh-red)' }}>
-          <AlertCircle style={{ width: '22px', height: '22px', flexShrink: 0 }} />
-          <div>
-            <p style={{ margin: 0, fontWeight: 700, fontSize: '0.9rem' }}>Backend Connection Failed</p>
-            <p style={{ margin: 0, fontSize: '0.825rem', color: 'var(--text-muted)' }}>Cannot reach FastAPI server at <code>http://localhost:8000</code>.</p>
-          </div>
-        </div>
-      )}
-
-      {/* ─── 3-Column Grid Layout (EXACT MATCH to Admin Studio / Image 1) ─── */}
+      {/* ─── 3-Column Grid Layout ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', alignItems: 'stretch' }}>
         
-        {/* Card 1: Row 0, Col 0 — TOTAL BUDGET vs ACTUAL */}
-        <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gridColumn: 'span 1', gridRow: 'span 1' }}>
+        {/* Card 1: TOTAL BUDGET vs ACTUAL */}
+        <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gridColumn: 'span 1', gridRow: 'span 1', background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
           <h3 style={{ fontSize: '0.825rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em', margin: '0 0 1.25rem 0', color: 'var(--text-main)' }}>
             TOTAL BUDGET vs ACTUAL – CURRENT MONTH
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.85rem', flex: 1 }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem', minWidth: 0 }}>
-              <div title={tb.actual_formula || "Formula: invoice_output.net_dom_amount + outstanding_output.backlog_value_base_curr"}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', marginBottom: '0.35rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
+              <div title={tb.actual_formula}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Actual</span>
-                  <span style={{ fontSize: '0.7rem', color: '#10b981', cursor: 'help' }}>Hover for Formula</span>
+                  <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#10b981' }}>{toMn(tb.actual)}</span>
                 </div>
-                <div style={{ position: 'relative', background: 'var(--bg-hover)', borderRadius: '4px', height: '36px', display: 'flex', alignItems: 'center', cursor: 'help' }}>
-                  <div style={{ width: `${Math.min((tb.actual / tbMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '0.5rem', minWidth: '60px', transition: 'width 0.5s ease' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#ffffff', whiteSpace: 'nowrap' }}>{toMn(tb.actual)}</span>
-                  </div>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                  <div style={{ width: `${Math.min((tb.actual / tbMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
-              <div title={tb.target_formula || "Formula: SUM(month_col) from total_budget table"}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', marginBottom: '0.35rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+              <div title={tb.target_formula}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Target</span>
-                  <span style={{ fontSize: '0.7rem', color: '#c8102e', cursor: 'help' }}>Hover for Formula</span>
+                  <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#c8102e' }}>{toMn(tb.target)}</span>
                 </div>
-                <div style={{ position: 'relative', background: 'var(--bg-hover)', borderRadius: '4px', height: '36px', display: 'flex', alignItems: 'center', cursor: 'help' }}>
-                  <div style={{ width: `${Math.min((tb.target / tbMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '0.5rem', minWidth: '60px', transition: 'width 0.5s ease' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#ffffff', whiteSpace: 'nowrap' }}>{toMn(tb.target)}</span>
-                  </div>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                  <div style={{ width: `${Math.min((tb.target / tbMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
             </div>
             <div style={{ flexShrink: 0 }}>
-              <CircularGauge percentage={tb.pct} variance={toMn(tb.variance)} size={130} activeColor="#10b981" inactiveColor="var(--bg-hover)" />
+              <CircularGauge percentage={tb.pct} variance={toMn(tb.variance)} size={130} activeColor="#10b981" />
             </div>
           </div>
         </div>
 
-        {/* Card 2: Row 0, Col 1 — DIRECT BUDGET vs ACTUAL */}
-        <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gridColumn: 'span 1', gridRow: 'span 1' }}>
+        {/* Card 2: DIRECT BUDGET vs ACTUAL */}
+        <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gridColumn: 'span 1', gridRow: 'span 1', background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
           <h3 style={{ fontSize: '0.825rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em', margin: '0 0 1.25rem 0', color: 'var(--text-main)' }}>
             DIRECT BUDGET vs ACTUAL – CURRENT MONTH
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.85rem', flex: 1 }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem', minWidth: 0 }}>
-              <div title={db.actual_formula || "Formula: Direct Sales Invoiced Net Amount"}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', marginBottom: '0.35rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
+              <div title={db.actual_formula}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Actual</span>
-                  <span style={{ fontSize: '0.7rem', color: '#10b981', cursor: 'help' }}>Hover for Formula</span>
+                  <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#10b981' }}>{toMn(db.actual)}</span>
                 </div>
-                <div style={{ position: 'relative', background: 'var(--bg-hover)', borderRadius: '4px', height: '36px', display: 'flex', alignItems: 'center', cursor: 'help' }}>
-                  <div style={{ width: `${Math.min((db.actual / dbMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '0.5rem', minWidth: '60px', transition: 'width 0.5s ease' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#ffffff', whiteSpace: 'nowrap' }}>{toMn(db.actual)}</span>
-                  </div>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                  <div style={{ width: `${Math.min((db.actual / dbMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
-              <div title={db.target_formula || "Formula: Direct Sales Target"}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', marginBottom: '0.35rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+              <div title={db.target_formula}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Target</span>
-                  <span style={{ fontSize: '0.7rem', color: '#c8102e', cursor: 'help' }}>Hover for Formula</span>
+                  <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#c8102e' }}>{toMn(db.target)}</span>
                 </div>
-                <div style={{ position: 'relative', background: 'var(--bg-hover)', borderRadius: '4px', height: '36px', display: 'flex', alignItems: 'center', cursor: 'help' }}>
-                  <div style={{ width: `${Math.min((db.target / dbMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '0.5rem', minWidth: '60px', transition: 'width 0.5s ease' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#ffffff', whiteSpace: 'nowrap' }}>{toMn(db.target)}</span>
-                  </div>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                  <div style={{ width: `${Math.min((db.target / dbMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
             </div>
             <div style={{ flexShrink: 0 }}>
-              <CircularGauge percentage={db.pct} variance={toMn(db.variance)} size={130} activeColor="#10b981" inactiveColor="var(--bg-hover)" />
+              <CircularGauge percentage={db.pct} variance={toMn(db.variance)} size={130} activeColor="#10b981" />
             </div>
           </div>
         </div>
 
-        {/* Card 5: Row 0, Col 2, Span 2 Rows — ANNUAL BUDGET vs ACTUAL (Tall Right Column) */}
-        <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gridColumn: 'span 1', gridRow: 'span 2' }}>
+        {/* Card 5: ANNUAL BUDGET vs ACTUAL */}
+        <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gridColumn: 'span 1', gridRow: 'span 2', background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
           <h3 style={{ fontSize: '0.825rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em', margin: '0 0 1.25rem 0', color: 'var(--text-main)', textAlign: 'center' }}>
             ANNUAL BUDGET vs ACTUAL
           </h3>
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1rem 0' }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '1.8rem', height: '240px', width: '100%', position: 'relative' }}>
               {/* Target Bar */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }} title={an.target_formula || "Formula: SUM(total) from total_budget table"}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }} title={an.target_formula}>
                 <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#c8102e' }}>{toMnInt(an.target)}</span>
                 <div style={{ width: '56px', height: `${Math.max((an.target / anMax) * 200, 15)}px`, background: '#c8102e', borderRadius: '4px 4px 0 0', transition: 'height 0.5s ease' }} />
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Target</span>
               </div>
-              {/* Actual Bar with floating badge */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', position: 'relative' }} title={an.actual_formula || "Formula: Full YTD Invoiced Sales Actual"}>
+              {/* Actual Bar */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', position: 'relative' }} title={an.actual_formula}>
                 <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#10b981' }}>{toMnInt(an.actual)}</span>
                 <div style={{ width: '56px', height: `${Math.max((an.actual / anMax) * 200, 15)}px`, background: '#10b981', borderRadius: '4px 4px 0 0', position: 'relative', transition: 'height 0.5s ease' }}>
-                  {/* Floating percentage badge */}
                   <div style={{
                     position: 'absolute', top: '45%', left: '50%',
                     transform: 'translate(-50%, -50%)',
@@ -261,74 +277,66 @@ const DashboardFyPage = () => {
           </div>
         </div>
 
-        {/* Card 3: Row 1, Col 0 — DIS : PRI BUDGET vs ACTUAL */}
-        <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gridColumn: 'span 1', gridRow: 'span 1' }}>
+        {/* Card 3: DIS : PRI BUDGET vs ACTUAL */}
+        <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gridColumn: 'span 1', gridRow: 'span 1', background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
           <h3 style={{ fontSize: '0.825rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em', margin: '0 0 1.25rem 0', color: 'var(--text-main)' }}>
             DIS : PRI BUDGET vs ACTUAL – CURRENT MONTH
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.85rem', flex: 1 }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem', minWidth: 0 }}>
-              <div title={dp.actual_formula || "Formula: SUM(primary_actual) from dis_budget"}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', marginBottom: '0.35rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
+              <div title={dp.actual_formula}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Actual</span>
-                  <span style={{ fontSize: '0.7rem', color: '#10b981', cursor: 'help' }}>Hover for Formula</span>
+                  <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#10b981' }}>{toMn(dp.actual)}</span>
                 </div>
-                <div style={{ position: 'relative', background: 'var(--bg-hover)', borderRadius: '4px', height: '36px', display: 'flex', alignItems: 'center', cursor: 'help' }}>
-                  <div style={{ width: `${Math.min((dp.actual / dpMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '0.5rem', minWidth: '60px', transition: 'width 0.5s ease' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#ffffff', whiteSpace: 'nowrap' }}>{toMn(dp.actual)}</span>
-                  </div>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                  <div style={{ width: `${Math.min((dp.actual / dpMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
-              <div title={dp.target_formula || "Formula: SUM(primary_target) from dis_budget"}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', marginBottom: '0.35rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+              <div title={dp.target_formula}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Target</span>
-                  <span style={{ fontSize: '0.7rem', color: '#c8102e', cursor: 'help' }}>Hover for Formula</span>
+                  <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#c8102e' }}>{toMn(dp.target)}</span>
                 </div>
-                <div style={{ position: 'relative', background: 'var(--bg-hover)', borderRadius: '4px', height: '36px', display: 'flex', alignItems: 'center', cursor: 'help' }}>
-                  <div style={{ width: `${Math.min((dp.target / dpMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '0.5rem', minWidth: '60px', transition: 'width 0.5s ease' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#ffffff', whiteSpace: 'nowrap' }}>{toMn(dp.target)}</span>
-                  </div>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                  <div style={{ width: `${Math.min((dp.target / dpMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
             </div>
             <div style={{ flexShrink: 0 }}>
-              <CircularGauge percentage={dp.pct} variance={toMn(dp.variance)} size={130} activeColor="#10b981" inactiveColor="var(--bg-hover)" />
+              <CircularGauge percentage={dp.pct} variance={toMn(dp.variance)} size={130} activeColor="#10b981" />
             </div>
           </div>
         </div>
 
-        {/* Card 4: Row 1, Col 1 — DIS : RD BUDGET vs ACTUAL */}
-        <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gridColumn: 'span 1', gridRow: 'span 1' }}>
+        {/* Card 4: DIS : RD BUDGET vs ACTUAL */}
+        <div className="glass-card" style={{ padding: '1.25rem', display: 'flex', flexDirection: 'column', gridColumn: 'span 1', gridRow: 'span 1', background: '#ffffff', border: '1px solid #e2e8f0', boxShadow: '0 4px 12px rgba(0,0,0,0.04)' }}>
           <h3 style={{ fontSize: '0.825rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.03em', margin: '0 0 1.25rem 0', color: 'var(--text-main)' }}>
             DIS : RD BUDGET vs ACTUAL – CURRENT MONTH
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.85rem', flex: 1 }}>
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1.25rem', minWidth: 0 }}>
-              <div title={dr.actual_formula || "Formula: SUM(rd_actual) from dis_budget"}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', marginBottom: '0.35rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
+              <div title={dr.actual_formula}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Actual</span>
-                  <span style={{ fontSize: '0.7rem', color: '#10b981', cursor: 'help' }}>Hover for Formula</span>
+                  <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#10b981' }}>{toMn(dr.actual)}</span>
                 </div>
-                <div style={{ position: 'relative', background: 'var(--bg-hover)', borderRadius: '4px', height: '36px', display: 'flex', alignItems: 'center', cursor: 'help' }}>
-                  <div style={{ width: `${Math.min((dr.actual / drMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '0.5rem', minWidth: '60px', transition: 'width 0.5s ease' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#ffffff', whiteSpace: 'nowrap' }}>{toMn(dr.actual)}</span>
-                  </div>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                  <div style={{ width: `${Math.min((dr.actual / drMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
-              <div title={dr.target_formula || "Formula: SUM(rd_target) from dis_budget"}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-subtle)', marginBottom: '0.35rem', fontWeight: 600, display: 'flex', justifyContent: 'space-between' }}>
+              <div title={dr.target_formula}>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Target</span>
-                  <span style={{ fontSize: '0.7rem', color: '#c8102e', cursor: 'help' }}>Hover for Formula</span>
+                  <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#c8102e' }}>{toMn(dr.target)}</span>
                 </div>
-                <div style={{ position: 'relative', background: 'var(--bg-hover)', borderRadius: '4px', height: '36px', display: 'flex', alignItems: 'center', cursor: 'help' }}>
-                  <div style={{ width: `${Math.min((dr.target / drMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: '0.5rem', minWidth: '60px', transition: 'width 0.5s ease' }}>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#ffffff', whiteSpace: 'nowrap' }}>{toMn(dr.target)}</span>
-                  </div>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                  <div style={{ width: `${Math.min((dr.target / drMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
             </div>
             <div style={{ flexShrink: 0 }}>
-              <CircularGauge percentage={dr.pct} variance={toMn(dr.variance)} size={130} activeColor="#f59e0b" inactiveColor="var(--bg-hover)" />
+              <CircularGauge percentage={dr.pct} variance={toMn(dr.variance)} size={130} activeColor="#f59e0b" />
             </div>
           </div>
         </div>

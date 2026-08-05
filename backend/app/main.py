@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.database import init_db
-from app.routers import health, reports, seed, budget, dashboard_fy, custom_dashboard, auth, users, division_mappings
+from app.routers import health, reports, seed, budget, dashboard_fy, custom_dashboard, auth, users, division_mappings, prode_ifs, oracle_sync, axienta
 
 app = FastAPI(
     title="George Steuart Health Executive Dashboard API",
@@ -34,6 +34,9 @@ app.include_router(custom_dashboard.router)
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(division_mappings.router)
+app.include_router(prode_ifs.router)
+app.include_router(oracle_sync.router)
+app.include_router(axienta.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -4,16 +4,38 @@ import KpiCard from '../components/KpiCard';
 import { Search, Truck, DollarSign, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { ExcelColHeader, ExcelRowNum, ExcelRowHeader } from '../components/ExcelTableHeader';
 
-const COLUMNS = [
-  { col: 'B', label: 'Customer No' },
-  { col: 'C', label: 'Customer Name', minWidth: '200px' },
-  { col: 'D', label: 'Order No' },
-  { col: 'I', label: 'Catalog No' },
-  { col: 'J', label: 'Description', minWidth: '180px' },
-  { col: 'K', label: 'Qty Due', align: 'right' },
-  { col: 'M', label: 'Unit Price', align: 'right' },
-  { col: 'N', label: 'Delivery Date' },
-  { col: 'O', label: 'Backlog Value', align: 'right' },
+const ALL_OUTSTANDING_COLUMNS = [
+  { col: 'A', field: 'customer_no', label: 'Customer No' },
+  { col: 'B', field: 'customer_name', label: 'Customer Name', minWidth: '220px' },
+  { col: 'C', field: 'order_no', label: 'Order No' },
+  { col: 'D', field: 'line_no', label: 'Line No' },
+  { col: 'E', field: 'rel_no', label: 'Rel No' },
+  { col: 'F', field: 'line_state', label: 'Line State' },
+  { col: 'G', field: 'agreement_id', label: 'Agreement ID' },
+  { col: 'H', field: 'catalog_no', label: 'Catalog No' },
+  { col: 'I', field: 'catalog_desc', label: 'Description', minWidth: '200px' },
+  { col: 'J', field: 'condition_code', label: 'Condition Code' },
+  { col: 'K', field: 'condition_code_desc', label: 'Condition Desc' },
+  { col: 'L', field: 'contract', label: 'Contract' },
+  { col: 'M', field: 'buy_qty_due', label: 'Buy Qty Due', align: 'right', isNumber: true },
+  { col: 'N', field: 'sales_unit_meas', label: 'Sales Unit Meas' },
+  { col: 'O', field: 'calculated_qty', label: 'Calculated Qty', align: 'right', isNumber: true },
+  { col: 'P', field: 'price_unit_meas', label: 'Price Unit Meas' },
+  { col: 'Q', field: 'calculated_unit_price', label: 'Unit Price', align: 'right', isCurrency: true },
+  { col: 'R', field: 'planned_delivery_date', label: 'Planned Delivery Date', isDate: true },
+  { col: 'S', field: 'backlog_value_base_curr', label: 'Backlog Value', align: 'right', isCurrency: true },
+  { col: 'T', field: 'currency_code', label: 'Currency' },
+  { col: 'U', field: 'cust_grp', label: 'Cust Group' },
+  { col: 'V', field: 'catalog_group', label: 'Catalog Group' },
+  { col: 'W', field: 'region_code', label: 'Region Code' },
+  { col: 'X', field: 'district_code', label: 'District Code' },
+  { col: 'Y', field: 'market_code', label: 'Market Code' },
+  { col: 'Z', field: 'country_code', label: 'Country Code' },
+  { col: 'AA', field: 'salesman_code', label: 'Salesman Code' },
+  { col: 'AB', field: 'authorize_code', label: 'Authorize Code' },
+  { col: 'AC', field: 'price_list_no', label: 'Price List No' },
+  { col: 'AD', field: 'priority', label: 'Priority' },
+  { col: 'AE', field: 'line_item_no', label: 'Line Item No' },
 ];
 
 const OutstandingOutputPage = () => {
@@ -51,14 +73,22 @@ const OutstandingOutputPage = () => {
     setPage(1);
   };
 
+  const renderCellValue = (row, c) => {
+    const val = row[c.field];
+    if (val === null || val === undefined || val === '') return '-';
+    if (c.isCurrency) return formatCurrency(val);
+    if (c.isDate && typeof val === 'string') return val.split(' ')[0];
+    return String(val);
+  };
+
   return (
     <div className="page-view animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
       <div>
         <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-main)', margin: 0 }}>
-          Outstanding Output Report
+          Outstanding Output Report (All 31 Columns)
         </h2>
         <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', margin: '0.25rem 0 0 0' }}>
-          Outstanding orders and backlog from <code style={{ background: 'var(--bg-hover)', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>Outstanding Output.csv</code> (170 Records) — Excel-style column references (A, B, C...)
+          Complete 31 columns from <code style={{ background: 'var(--bg-hover)', padding: '0.2rem 0.4rem', borderRadius: '4px' }}>Outstanding Output.csv</code> (170 Records) — Excel Coordinates (A to AE)
         </p>
       </div>
 
@@ -76,7 +106,7 @@ const OutstandingOutputPage = () => {
         <KpiCard
           title="Total Backlog Value"
           value={data ? `LKR ${formatCurrency(data.total_backlog_value)}` : (error ? 'Offline' : 'Loading...')}
-          subtext="Total Outstanding Order Backlog (Col O)"
+          subtext="Total Outstanding Order Backlog (Col S)"
           icon={DollarSign}
           accentColor="#3b82f6"
         />
@@ -90,11 +120,11 @@ const OutstandingOutputPage = () => {
       </div>
 
       <div className="glass-card" style={{ padding: '1rem 1.25rem' }}>
-        <div style={{ position: 'relative' }}>
+        <div style={{ position: 'relative', width: '100%', maxWidth: '480px' }}>
           <Search style={{ position: 'absolute', left: '0.875rem', top: '50%', transform: 'translateY(-50%)', width: '18px', height: '18px', color: 'var(--text-subtle)' }} />
           <input
             type="text"
-            placeholder="Search Customer No (B), Customer Name (C), Order No (D), Catalog No (I), Description (J)..."
+            placeholder="Search Customer No, Customer Name, Order No, Catalog No, Description..."
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             style={{ width: '100%', padding: '0.55rem 1rem 0.55rem 2.5rem', background: 'var(--bg-primary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-main)', fontSize: '0.875rem', outline: 'none', boxSizing: 'border-box' }}
@@ -102,21 +132,21 @@ const OutstandingOutputPage = () => {
         </div>
       </div>
 
-      {/* Main Datatable with Excel-Style Headers */}
+      {/* Main Datatable with Excel-Style Headers for All 31 Columns */}
       <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto', maxHeight: '600px' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.825rem', textAlign: 'left' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left', minWidth: '2600px' }}>
             <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
               <tr>
                 <ExcelRowHeader />
-                {COLUMNS.map(c => (
+                {ALL_OUTSTANDING_COLUMNS.map(c => (
                   <ExcelColHeader key={c.col} col={c.col} label={c.label} align={c.align} minWidth={c.minWidth} />
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={COLUMNS.length + 1} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading Outstanding Output records...</td></tr>
+                <tr><td colSpan={ALL_OUTSTANDING_COLUMNS.length + 1} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading Outstanding Output records...</td></tr>
               ) : data && data.rows && data.rows.length > 0 ? (
                 data.rows.map((row, idx) => {
                   const rowNum = (page - 1) * limit + idx + 1;
@@ -128,20 +158,26 @@ const OutstandingOutputPage = () => {
                       onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
                     >
                       <ExcelRowNum num={rowNum} />
-                      <td style={{ padding: '0.65rem 1rem', fontFamily: 'monospace' }}>{row.customer_no || '-'}</td>
-                      <td style={{ padding: '0.65rem 1rem', fontWeight: 600 }}>{row.customer_name || '-'}</td>
-                      <td style={{ padding: '0.65rem 1rem', fontFamily: 'monospace', fontWeight: 600 }}>{row.order_no || '-'}</td>
-                      <td style={{ padding: '0.65rem 1rem', fontFamily: 'monospace' }}>{row.catalog_no || '-'}</td>
-                      <td style={{ padding: '0.65rem 1rem' }}>{row.catalog_desc || '-'}</td>
-                      <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>{row.buy_qty_due ?? '-'}</td>
-                      <td style={{ padding: '0.65rem 1rem', textAlign: 'right' }}>{formatCurrency(row.calculated_unit_price)}</td>
-                      <td style={{ padding: '0.65rem 1rem', whiteSpace: 'nowrap', color: 'var(--text-subtle)' }}>{row.planned_delivery_date ? row.planned_delivery_date.split(' ')[0] : '-'}</td>
-                      <td style={{ padding: '0.65rem 1rem', textAlign: 'right', fontWeight: 700, color: '#3b82f6' }}>{formatCurrency(row.backlog_value_base_curr)}</td>
+                      {ALL_OUTSTANDING_COLUMNS.map(c => (
+                        <td
+                          key={c.col}
+                          style={{
+                            padding: '0.65rem 0.85rem',
+                            textAlign: c.align || 'left',
+                            fontWeight: c.field === 'backlog_value_base_curr' ? 800 : (c.field === 'order_no' || c.field === 'customer_no' ? 700 : 400),
+                            color: c.field === 'backlog_value_base_curr' ? '#3b82f6' : 'var(--text-main)',
+                            fontFamily: c.field === 'order_no' || c.field === 'customer_no' || c.field === 'catalog_no' ? 'monospace' : 'inherit',
+                            whiteSpace: 'nowrap'
+                          }}
+                        >
+                          {renderCellValue(row, c)}
+                        </td>
+                      ))}
                     </tr>
                   );
                 })
               ) : (
-                <tr><td colSpan={COLUMNS.length + 1} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <tr><td colSpan={ALL_OUTSTANDING_COLUMNS.length + 1} style={{ padding: '2.5rem', textAlign: 'center', color: 'var(--text-muted)' }}>
                   {error ? 'Backend offline.' : 'No records matching search criteria.'}
                 </td></tr>
               )}
@@ -149,28 +185,34 @@ const OutstandingOutputPage = () => {
           </table>
         </div>
 
-        <div style={{ padding: '0.85rem 1.25rem', borderTop: '1px solid var(--border-color)', background: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Rows per page:</span>
-            {[10, 50, 100, 200].map((count) => (
-              <button key={count} onClick={() => handleLimitChange(count)}
-                style={{ padding: '0.35rem 0.75rem', borderRadius: 'var(--radius-sm)', fontSize: '0.8rem', fontWeight: limit === count ? 700 : 500, cursor: 'pointer', border: limit === count ? '1px solid var(--gsh-red)' : '1px solid var(--border-color)', background: limit === count ? 'var(--gsh-red)' : 'var(--bg-primary)', color: limit === count ? '#ffffff' : 'var(--text-main)', transition: 'all 0.2s ease-in-out' }}>
-                {count}
-              </button>
-            ))}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.85rem' }}>
-            {data && <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Page <strong>{data.page}</strong> of <strong>{data.total_pages}</strong> ({data.total_count.toLocaleString()} records)</span>}
-            <div style={{ display: 'flex', gap: '0.4rem' }}>
-              <button disabled={page <= 1 || loading || error} onClick={() => setPage(p => Math.max(p - 1, 1))} className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.8rem' }}>
+        {/* Pagination Bar */}
+        {data && data.total_pages > 0 && (
+          <div style={{ padding: '0.875rem 1.25rem', borderTop: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', background: 'var(--bg-card)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Showing <strong>{((page - 1) * limit) + 1}</strong> to <strong>{Math.min(page * limit, data.total_count)}</strong> of <strong>{data.total_count.toLocaleString()}</strong> records
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Rows:</span>
+                {[10, 25, 50, 100].map((size) => (
+                  <button key={size} onClick={() => handleLimitChange(size)} style={{ padding: '0.2rem 0.5rem', fontSize: '0.75rem', borderRadius: '4px', border: '1px solid var(--border-color)', background: limit === size ? '#3b82f6' : 'var(--bg-primary)', color: limit === size ? '#fff' : 'var(--text-main)', cursor: 'pointer', fontWeight: limit === size ? 700 : 400 }}>
+                    {size}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <button disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.75rem', borderRadius: 'var(--radius-xs)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-main)', fontSize: '0.85rem', cursor: page <= 1 ? 'not-allowed' : 'pointer', opacity: page <= 1 ? 0.5 : 1 }}>
                 <ChevronLeft style={{ width: '16px', height: '16px' }} /> Prev
               </button>
-              <button disabled={!data || page >= data.total_pages || loading || error} onClick={() => setPage(p => p + 1)} className="btn btn-secondary" style={{ padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.8rem' }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-main)' }}>Page {page} of {data.total_pages}</span>
+              <button disabled={page >= data.total_pages} onClick={() => setPage(p => Math.min(data.total_pages, p + 1))} style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', padding: '0.4rem 0.75rem', borderRadius: 'var(--radius-xs)', border: '1px solid var(--border-color)', background: 'var(--bg-primary)', color: 'var(--text-main)', fontSize: '0.85rem', cursor: page >= data.total_pages ? 'not-allowed' : 'pointer', opacity: page >= data.total_pages ? 0.5 : 1 }}>
                 Next <ChevronRight style={{ width: '16px', height: '16px' }} />
               </button>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

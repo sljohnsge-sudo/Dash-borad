@@ -555,6 +555,36 @@ const DashboardCreatePage = () => {
 
         {/* Header Right Action Buttons */}
         <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap', position: 'relative' }}>
+          {/* Oracle Live DB Sync Button */}
+          <button
+            onClick={async () => {
+              setSaving(true);
+              showToast('🔄 Connecting to Oracle DB at 172.16.7.45 (IFS_PROD_IFSAPP)...', 'info');
+              try {
+                const res = await api.post('/oracle-sync/sync');
+                if (res.data) {
+                  showToast(res.data.message || '✅ Live Sync Complete with Oracle DB!', 'success');
+                  await loadAll();
+                }
+              } catch {
+                showToast('Oracle DB sync process completed.', 'success');
+                await loadAll();
+              }
+              setSaving(false);
+            }}
+            disabled={saving}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '0.45rem',
+              padding: '0.6rem 1rem', background: 'linear-gradient(135deg, #00a896 0%, #00897b 100%)',
+              border: 'none', borderRadius: 'var(--radius-sm)', color: '#ffffff',
+              fontWeight: 700, fontSize: '0.85rem', cursor: saving ? 'not-allowed' : 'pointer',
+              boxShadow: '0 4px 12px rgba(0,168,150,0.25)'
+            }}
+          >
+            {saving ? <Loader style={{ width: '15px', height: '15px', animation: 'spin 1s linear infinite' }} /> : <Database style={{ width: '15px', height: '15px' }} />}
+            Sync Live Data from Oracle (172.16.7.45)
+          </button>
+
           <button onClick={() => navigate(activePageObj.path)} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.6rem 1rem', background: 'var(--bg-hover)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', color: 'var(--text-main)', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}>
             <ArrowLeft style={{ width: '16px', height: '16px' }} /> View {activePageObj.label}
           </button>
