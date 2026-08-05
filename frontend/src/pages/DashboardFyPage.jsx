@@ -1,21 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, Calendar, Info } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
+import MonthCalendarBar from '../components/common/MonthCalendarBar';
 import api from '../services/api';
-
-const MONTH_TABS = [
-  { key: 'april', label: 'Apr-26' },
-  { key: 'may', label: 'May-26' },
-  { key: 'june', label: 'Jun-26' },
-  { key: 'july', label: 'Jul-26' },
-  { key: 'august', label: 'Aug-26' },
-  { key: 'september', label: 'Sep-26' },
-  { key: 'october', label: 'Oct-26' },
-  { key: 'november', label: 'Nov-26' },
-  { key: 'december', label: 'Dec-26' },
-  { key: 'january', label: 'Jan-27' },
-  { key: 'february', label: 'Feb-27' },
-  { key: 'march', label: 'Mar-27' },
-];
 
 const toMn = (val) => {
   if (val === undefined || val === null) return '0.0 M';
@@ -29,7 +15,7 @@ const toMnInt = (val) => {
   return Math.round(mn).toLocaleString('en-US') + ' M';
 };
 
-const CircularGauge = ({ percentage, variance, size = 130, activeColor = '#10b981', inactiveColor = 'var(--bg-hover)' }) => {
+const CircularGauge = ({ percentage, variance, size = 130, activeColor = '#10b981' }) => {
   const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -81,29 +67,29 @@ const CircularGauge = ({ percentage, variance, size = 130, activeColor = '#10b98
 
 const DashboardFyPage = () => {
   const [selectedMonth, setSelectedMonth] = useState('july');
+  const [selectedDate, setSelectedDate] = useState(null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
-    setError(null);
     try {
-      const res = await api.get('/reports/dashboard-fy-overview', {
-        params: { month: selectedMonth }
-      });
+      const params = { month: selectedMonth };
+      if (selectedDate) params.date = selectedDate;
+
+      const res = await api.get('/reports/dashboard-fy-overview', { params });
       if (res.data) {
         setData(res.data);
       }
     } catch {
-      setError('Could not connect to live backend server.');
+      // Fallback
     }
     setLoading(false);
   };
 
   useEffect(() => {
     loadData();
-  }, [selectedMonth]);
+  }, [selectedMonth, selectedDate]);
 
   // Data helpers
   const tb = data?.total_budget || { target: 1092090000, actual: 1200681486.76, pct: 110, variance: 108591486.76 };
@@ -132,46 +118,13 @@ const DashboardFyPage = () => {
         </button>
       </div>
 
-      {/* ─── Hover Formula Banner ─── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(0,168,150,0.08)', padding: '0.4rem 0.85rem', borderRadius: 'var(--radius-sm)', border: '1px solid rgba(0,168,150,0.3)', fontSize: '0.8rem', color: 'var(--gsh-teal)' }}>
-        <Info style={{ width: '16px', height: '16px', flexShrink: 0 }} />
-        <span>Hover over any bar to view exact database calculation formula!</span>
-      </div>
-
-      {/* ─── Top 12 Month Selector Bar ─── */}
-      <div className="glass-card" style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem', overflowX: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0 0.5rem', flexShrink: 0 }}>
-          <Calendar style={{ width: '18px', height: '18px', color: 'var(--gsh-red)' }} />
-          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>Month:</span>
-        </div>
-        {MONTH_TABS.map((tab) => {
-          const isActive = selectedMonth === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setSelectedMonth(tab.key)}
-              style={{
-                flex: 1,
-                minWidth: '78px',
-                padding: '0.5rem 0.55rem',
-                borderRadius: 'var(--radius-xs)',
-                border: isActive ? '1px solid var(--gsh-red)' : '1px solid var(--border-color)',
-                background: isActive ? 'var(--gsh-red)' : 'var(--bg-card)',
-                color: isActive ? '#ffffff' : 'var(--text-main)',
-                fontWeight: isActive ? 800 : 500,
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-                textAlign: 'center',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s ease-in-out',
-                boxShadow: isActive ? '0 2px 8px rgba(200,16,46,0.25)' : 'none'
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* ─── Interactive Month & Calendar Date Bar ─── */}
+      <MonthCalendarBar
+        selectedMonth={selectedMonth}
+        onSelectMonth={setSelectedMonth}
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+      />
 
       {/* ─── 3-Column Grid Layout ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', alignItems: 'stretch' }}>
@@ -183,21 +136,21 @@ const DashboardFyPage = () => {
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.85rem', flex: 1 }}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
-              <div title={tb.actual_formula}>
+              <div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Actual</span>
                   <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#10b981' }}>{toMn(tb.actual)}</span>
                 </div>
-                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px' }}>
                   <div style={{ width: `${Math.min((tb.actual / tbMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
-              <div title={tb.target_formula}>
+              <div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Target</span>
                   <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#c8102e' }}>{toMn(tb.target)}</span>
                 </div>
-                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px' }}>
                   <div style={{ width: `${Math.min((tb.target / tbMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
@@ -215,21 +168,21 @@ const DashboardFyPage = () => {
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.85rem', flex: 1 }}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
-              <div title={db.actual_formula}>
+              <div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Actual</span>
                   <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#10b981' }}>{toMn(db.actual)}</span>
                 </div>
-                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px' }}>
                   <div style={{ width: `${Math.min((db.actual / dbMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
-              <div title={db.target_formula}>
+              <div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Target</span>
                   <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#c8102e' }}>{toMn(db.target)}</span>
                 </div>
-                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px' }}>
                   <div style={{ width: `${Math.min((db.target / dbMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
@@ -248,13 +201,13 @@ const DashboardFyPage = () => {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '1rem 0' }}>
             <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: '1.8rem', height: '240px', width: '100%', position: 'relative' }}>
               {/* Target Bar */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }} title={an.target_formula}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#c8102e' }}>{toMnInt(an.target)}</span>
                 <div style={{ width: '56px', height: `${Math.max((an.target / anMax) * 200, 15)}px`, background: '#c8102e', borderRadius: '4px 4px 0 0', transition: 'height 0.5s ease' }} />
                 <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>Target</span>
               </div>
               {/* Actual Bar */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', position: 'relative' }} title={an.actual_formula}>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', position: 'relative' }}>
                 <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#10b981' }}>{toMnInt(an.actual)}</span>
                 <div style={{ width: '56px', height: `${Math.max((an.actual / anMax) * 200, 15)}px`, background: '#10b981', borderRadius: '4px 4px 0 0', position: 'relative', transition: 'height 0.5s ease' }}>
                   <div style={{
@@ -284,21 +237,21 @@ const DashboardFyPage = () => {
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.85rem', flex: 1 }}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
-              <div title={dp.actual_formula}>
+              <div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Actual</span>
                   <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#10b981' }}>{toMn(dp.actual)}</span>
                 </div>
-                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px' }}>
                   <div style={{ width: `${Math.min((dp.actual / dpMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
-              <div title={dp.target_formula}>
+              <div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Target</span>
                   <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#c8102e' }}>{toMn(dp.target)}</span>
                 </div>
-                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px' }}>
                   <div style={{ width: `${Math.min((dp.target / dpMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
@@ -316,21 +269,21 @@ const DashboardFyPage = () => {
           </h3>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.85rem', flex: 1 }}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
-              <div title={dr.actual_formula}>
+              <div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Actual</span>
                   <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#10b981' }}>{toMn(dr.actual)}</span>
                 </div>
-                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px' }}>
                   <div style={{ width: `${Math.min((dr.actual / drMax) * 100, 100)}%`, background: '#10b981', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>
-              <div title={dr.target_formula}>
+              <div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-main)', marginBottom: '0.35rem', fontWeight: 700, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span>Target</span>
                   <span style={{ fontSize: '0.825rem', fontWeight: 800, color: '#c8102e' }}>{toMn(dr.target)}</span>
                 </div>
-                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px', cursor: 'help' }}>
+                <div style={{ background: '#f1f5f9', borderRadius: '6px', height: '28px', overflow: 'hidden', padding: '2px' }}>
                   <div style={{ width: `${Math.min((dr.target / drMax) * 100, 100)}%`, background: '#c8102e', height: '100%', borderRadius: '4px', transition: 'width 0.5s ease' }} />
                 </div>
               </div>

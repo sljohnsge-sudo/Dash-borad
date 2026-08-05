@@ -115,9 +115,11 @@ MONTH_NUM_MAP = {
 @router.get("/total-range-fy")
 def get_total_range_fy(
     month: Optional[str] = Query("july"),
+    date: Optional[str] = Query(None),
     search: Optional[str] = Query(None)
 ):
     selected_month = month.lower().strip() if month and month.lower().strip() in FY_MONTH_ORDER else "july"
+    filter_date = date.strip() if date and date.strip() else None
     
     idx = FY_MONTH_ORDER.index(selected_month)
     cum_months = FY_MONTH_ORDER[:idx + 1]
@@ -189,17 +191,31 @@ def get_total_range_fy(
                 sg_b_map[sg_key] = r
 
         # 3. Bulk fetch invoice actuals (NET_DOM_AMOUNT) from invoice_output table joining division_mappings
-        cursor.execute("""
-            SELECT 
-                TRIM(i.catalog_group) as s_grp,
-                TRIM(i.catalog_no) as part_no,
-                COALESCE(TRIM(m.range_name), TRIM(i.catalog_group)) as r_name,
-                MONTH(i.invoice_date) as inv_m,
-                SUM(i.net_dom_amount) as total_act
-            FROM invoice_output i
-            LEFT JOIN division_mappings m ON LOWER(TRIM(i.catalog_group)) = LOWER(TRIM(m.sales_group))
-            GROUP BY s_grp, part_no, r_name, inv_m;
-        """)
+        if filter_date:
+            cursor.execute("""
+                SELECT 
+                    TRIM(i.catalog_group) as s_grp,
+                    TRIM(i.catalog_no) as part_no,
+                    COALESCE(TRIM(m.range_name), TRIM(i.catalog_group)) as r_name,
+                    MONTH(i.invoice_date) as inv_m,
+                    SUM(i.net_dom_amount) as total_act
+                FROM invoice_output i
+                LEFT JOIN division_mappings m ON LOWER(TRIM(i.catalog_group)) = LOWER(TRIM(m.sales_group))
+                WHERE DATE(i.invoice_date) = %s
+                GROUP BY s_grp, part_no, r_name, inv_m;
+            """, (filter_date,))
+        else:
+            cursor.execute("""
+                SELECT 
+                    TRIM(i.catalog_group) as s_grp,
+                    TRIM(i.catalog_no) as part_no,
+                    COALESCE(TRIM(m.range_name), TRIM(i.catalog_group)) as r_name,
+                    MONTH(i.invoice_date) as inv_m,
+                    SUM(i.net_dom_amount) as total_act
+                FROM invoice_output i
+                LEFT JOIN division_mappings m ON LOWER(TRIM(i.catalog_group)) = LOWER(TRIM(m.sales_group))
+                GROUP BY s_grp, part_no, r_name, inv_m;
+            """)
         sg_inv_map = {}
         r_inv_map = {}
         p_inv_map = {}

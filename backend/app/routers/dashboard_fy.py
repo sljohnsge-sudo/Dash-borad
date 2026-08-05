@@ -1,3 +1,4 @@
+import calendar
 from typing import Optional
 from fastapi import APIRouter, Query
 from app.core.database import get_db_connection
@@ -19,23 +20,38 @@ MONTH_NAMES = {
 }
 
 @router.get("/dashboard-fy-overview")
-def get_dashboard_fy_overview(month: Optional[str] = Query("july")):
+def get_dashboard_fy_overview(
+    month: Optional[str] = Query("july"),
+    date: Optional[str] = Query(None)
+):
     selected_month = month.lower().strip() if month and month.lower().strip() in MONTH_MAPPING else "july"
     month_num = MONTH_MAPPING[selected_month]
     month_name = MONTH_NAMES[selected_month]
     year = 2027 if month_num in [1, 2, 3] else 2026
 
+    # Determine days in selected month for target pro-rata
+    _, days_in_month = calendar.monthrange(year, month_num)
+    filter_date = date.strip() if date and date.strip() else None
+
     conn = get_db_connection()
     with conn.cursor() as cursor:
         # ─── 1. TOTAL BUDGET vs ACTUAL – CURRENT MONTH ───
         cursor.execute(f"SELECT COALESCE(SUM({selected_month}), 0) as target FROM total_budget;")
-        total_target_val = float(cursor.fetchone()['target'] or 0.0)
+        monthly_total_target = float(cursor.fetchone()['target'] or 0.0)
+        total_target_val = (monthly_total_target / days_in_month) if filter_date else monthly_total_target
 
-        cursor.execute("""
-            SELECT COALESCE(SUM(net_dom_amount), 0) as inv_net 
-            FROM invoice_output 
-            WHERE MONTH(invoice_date) = %s AND YEAR(invoice_date) = %s;
-        """, (month_num, year))
+        if filter_date:
+            cursor.execute("""
+                SELECT COALESCE(SUM(net_dom_amount), 0) as inv_net 
+                FROM invoice_output 
+                WHERE DATE(invoice_date) = %s;
+            """, (filter_date,))
+        else:
+            cursor.execute("""
+                SELECT COALESCE(SUM(net_dom_amount), 0) as inv_net 
+                FROM invoice_output 
+                WHERE MONTH(invoice_date) = %s AND YEAR(invoice_date) = %s;
+            """, (month_num, year))
         inv_net = float(cursor.fetchone()['inv_net'] or 0.0)
 
         cursor.execute("""
@@ -45,18 +61,27 @@ def get_dashboard_fy_overview(month: Optional[str] = Query("july")):
         """)
         out_back_non_gstea = float(cursor.fetchone()['back_val'] or 0.0)
 
-        total_actual_val = inv_net + out_back_non_gstea
+        total_actual_val = inv_net + (0.0 if filter_date else out_back_non_gstea)
         total_pct = round((total_actual_val / total_target_val) * 100) if total_target_val > 0 else 0
         total_variance = total_actual_val - total_target_val
 
         # ─── 2. DIS : PRI BUDGET vs ACTUAL – CURRENT MONTH ───
-        cursor.execute("""
-            SELECT COALESCE(SUM(net_dom_amount), 0) as dis_inv 
-            FROM invoice_output 
-            WHERE MONTH(invoice_date) = %s AND YEAR(invoice_date) = %s 
-              AND UPPER(TRIM(cust_grp)) = 'DISTRI'
-              AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL);
-        """, (month_num, year))
+        if filter_date:
+            cursor.execute("""
+                SELECT COALESCE(SUM(net_dom_amount), 0) as dis_inv 
+                FROM invoice_output 
+                WHERE DATE(invoice_date) = %s 
+                  AND UPPER(TRIM(cust_grp)) = 'DISTRI'
+                  AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL);
+            """, (filter_date,))
+        else:
+            cursor.execute("""
+                SELECT COALESCE(SUM(net_dom_amount), 0) as dis_inv 
+                FROM invoice_output 
+                WHERE MONTH(invoice_date) = %s AND YEAR(invoice_date) = %s 
+                  AND UPPER(TRIM(cust_grp)) = 'DISTRI'
+                  AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL);
+            """, (month_num, year))
         dis_pri_inv = float(cursor.fetchone()['dis_inv'] or 0.0)
 
         cursor.execute("""
@@ -67,26 +92,36 @@ def get_dashboard_fy_overview(month: Optional[str] = Query("july")):
         """)
         dis_pri_back = float(cursor.fetchone()['dis_back'] or 0.0)
 
-        pri_actual = dis_pri_inv + dis_pri_back
+        pri_actual = dis_pri_inv + (0.0 if filter_date else dis_pri_back)
 
         cursor.execute("""
             SELECT COALESCE(SUM(primary_target), 0) as pri_target 
             FROM dis_budget 
             WHERE MONTH(month) = %s OR month LIKE %s OR LOWER(month) = %s;
         """, (month_num, f"%-{month_num:02d}-%", selected_month))
-        pri_target = float(cursor.fetchone()['pri_target'] or 0.0)
+        monthly_pri_target = float(cursor.fetchone()['pri_target'] or 0.0)
+        pri_target = (monthly_pri_target / days_in_month) if filter_date else monthly_pri_target
 
         pri_pct = round((pri_actual / pri_target) * 100) if pri_target > 0 else 0
         pri_variance = pri_actual - pri_target
 
         # ─── 3. DIRECT BUDGET vs ACTUAL – CURRENT MONTH ───
-        cursor.execute("""
-            SELECT COALESCE(SUM(net_dom_amount), 0) as dir_inv 
-            FROM invoice_output 
-            WHERE MONTH(invoice_date) = %s AND YEAR(invoice_date) = %s 
-              AND (UPPER(TRIM(cust_grp)) != 'DISTRI' OR cust_grp IS NULL)
-              AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL);
-        """, (month_num, year))
+        if filter_date:
+            cursor.execute("""
+                SELECT COALESCE(SUM(net_dom_amount), 0) as dir_inv 
+                FROM invoice_output 
+                WHERE DATE(invoice_date) = %s 
+                  AND (UPPER(TRIM(cust_grp)) != 'DISTRI' OR cust_grp IS NULL)
+                  AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL);
+            """, (filter_date,))
+        else:
+            cursor.execute("""
+                SELECT COALESCE(SUM(net_dom_amount), 0) as dir_inv 
+                FROM invoice_output 
+                WHERE MONTH(invoice_date) = %s AND YEAR(invoice_date) = %s 
+                  AND (UPPER(TRIM(cust_grp)) != 'DISTRI' OR cust_grp IS NULL)
+                  AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL);
+            """, (month_num, year))
         dir_inv_net = float(cursor.fetchone()['dir_inv'] or 0.0)
 
         cursor.execute("""
@@ -97,7 +132,7 @@ def get_dashboard_fy_overview(month: Optional[str] = Query("july")):
         """)
         dir_out_back = float(cursor.fetchone()['dir_back'] or 0.0)
 
-        direct_actual = dir_inv_net + dir_out_back
+        direct_actual = dir_inv_net + (0.0 if filter_date else dir_out_back)
 
         direct_target = total_target_val - pri_target
         if direct_target < 0:
@@ -107,11 +142,18 @@ def get_dashboard_fy_overview(month: Optional[str] = Query("july")):
         direct_variance = direct_actual - direct_target
 
         # ─── 4. DIS : RD BUDGET vs ACTUAL ───
-        cursor.execute("""
-            SELECT COALESCE(SUM(value), 0) as rd_act 
-            FROM axienta_data 
-            WHERE MONTH(entry_date) = %s AND YEAR(entry_date) = %s;
-        """, (month_num, year))
+        if filter_date:
+            cursor.execute("""
+                SELECT COALESCE(SUM(value), 0) as rd_act 
+                FROM axienta_data 
+                WHERE DATE(entry_date) = %s;
+            """, (filter_date,))
+        else:
+            cursor.execute("""
+                SELECT COALESCE(SUM(value), 0) as rd_act 
+                FROM axienta_data 
+                WHERE MONTH(entry_date) = %s AND YEAR(entry_date) = %s;
+            """, (month_num, year))
         rd_actual = float(cursor.fetchone()['rd_act'] or 0.0)
 
         cursor.execute("""
@@ -119,7 +161,8 @@ def get_dashboard_fy_overview(month: Optional[str] = Query("july")):
             FROM dis_budget 
             WHERE MONTH(month) = %s OR month LIKE %s OR LOWER(month) = %s;
         """, (month_num, f"%-{month_num:02d}-%", selected_month))
-        rd_target = float(cursor.fetchone()['rd_target'] or 0.0)
+        monthly_rd_target = float(cursor.fetchone()['rd_target'] or 0.0)
+        rd_target = (monthly_rd_target / days_in_month) if filter_date else monthly_rd_target
 
         rd_pct = round((rd_actual / rd_target) * 100) if rd_target > 0 else 0
         rd_variance = rd_actual - rd_target
@@ -132,69 +175,77 @@ def get_dashboard_fy_overview(month: Optional[str] = Query("july")):
 
     conn.close()
 
+    label_text = f"Date: {filter_date}" if filter_date else month_name
+
     return {
         "selected_month": selected_month,
-        "month_label": month_name,
+        "selected_date": filter_date,
+        "month_label": label_text,
         "total_budget": {
             "target": round(total_target_val, 2),
             "actual": round(total_actual_val, 2),
             "pct": total_pct,
             "variance": round(total_variance, 2),
-            "actual_formula": f"Formula: invoice_output.NET_DOM_AMOUNT (LKR {inv_net:,.2f}) + outstanding_output.backlog (Excl GSTEA: LKR {out_back_non_gstea:,.2f})",
-            "target_formula": f"Formula: SUM({selected_month}) from total_budget table = LKR {total_target_val:,.2f}"
         },
         "direct_budget": {
             "target": round(direct_target, 2),
             "actual": round(direct_actual, 2),
             "pct": direct_pct,
             "variance": round(direct_variance, 2),
-            "actual_formula": f"Formula: Excluded cust_grp='DISTRI' & contract='GSTEA' -> Invoice (LKR {dir_inv_net:,.2f}) + Backlog (LKR {dir_out_back:,.2f})",
-            "target_formula": f"Formula: Total {month_name} Budget (LKR {total_target_val:,.2f}) - Dis Primary Target (LKR {pri_target:,.2f}) = LKR {direct_target:,.2f}"
         },
         "dis_pri": {
             "target": round(pri_target, 2),
             "actual": round(pri_actual, 2),
             "pct": pri_pct,
             "variance": round(pri_variance, 2),
-            "actual_formula": f"Formula: ONLY cust_grp='DISTRI' & contract!='GSTEA' -> Invoice (LKR {dis_pri_inv:,.2f}) + Backlog (LKR {dis_pri_back:,.2f})",
-            "target_formula": f"Formula: SUM(primary_target) from dis_budget for {month_name} = LKR {pri_target:,.2f}"
         },
         "dis_rd": {
             "target": round(rd_target, 2),
             "actual": round(rd_actual, 2),
             "pct": rd_pct,
             "variance": round(rd_variance, 2),
-            "actual_formula": f"Formula: SUM(value) from axienta_data table for {month_name} = LKR {rd_actual:,.2f}",
-            "target_formula": f"Formula: SUM(rd_target) from dis_budget table for {month_name} = LKR {rd_target:,.2f}"
         },
         "annual": {
             "target": round(annual_target, 2),
             "actual": round(annual_actual, 2),
             "pct": annual_pct,
-            "actual_formula": f"Formula: Full YTD Actual = LKR {annual_actual:,.2f}",
-            "target_formula": f"Formula: SUM(total) from total_budget table = LKR {annual_target:,.2f}"
         }
     }
 
 
 # ─── DIS DASHBOARD FY OVERVIEW ENDPOINT ───
 @router.get("/dis-dashboard-fy-overview")
-def get_dis_dashboard_fy_overview(month: Optional[str] = Query("july")):
+def get_dis_dashboard_fy_overview(
+    month: Optional[str] = Query("july"),
+    date: Optional[str] = Query(None)
+):
     selected_month = month.lower().strip() if month and month.lower().strip() in MONTH_MAPPING else "july"
     month_num = MONTH_MAPPING[selected_month]
     month_name = MONTH_NAMES[selected_month]
     year = 2027 if month_num in [1, 2, 3] else 2026
 
+    _, days_in_month = calendar.monthrange(year, month_num)
+    filter_date = date.strip() if date and date.strip() else None
+
     conn = get_db_connection()
     with conn.cursor() as cursor:
         # 1. Primary Sales Details (cust_grp = 'DISTRI')
-        cursor.execute("""
-            SELECT COALESCE(SUM(net_dom_amount), 0) as dis_inv 
-            FROM invoice_output 
-            WHERE MONTH(invoice_date) = %s AND YEAR(invoice_date) = %s 
-              AND UPPER(TRIM(cust_grp)) = 'DISTRI'
-              AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL);
-        """, (month_num, year))
+        if filter_date:
+            cursor.execute("""
+                SELECT COALESCE(SUM(net_dom_amount), 0) as dis_inv 
+                FROM invoice_output 
+                WHERE DATE(invoice_date) = %s 
+                  AND UPPER(TRIM(cust_grp)) = 'DISTRI'
+                  AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL);
+            """, (filter_date,))
+        else:
+            cursor.execute("""
+                SELECT COALESCE(SUM(net_dom_amount), 0) as dis_inv 
+                FROM invoice_output 
+                WHERE MONTH(invoice_date) = %s AND YEAR(invoice_date) = %s 
+                  AND UPPER(TRIM(cust_grp)) = 'DISTRI'
+                  AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL);
+            """, (month_num, year))
         pri_inv = float(cursor.fetchone()['dis_inv'] or 0.0)
 
         cursor.execute("""
@@ -205,24 +256,32 @@ def get_dis_dashboard_fy_overview(month: Optional[str] = Query("july")):
         """)
         pri_back = float(cursor.fetchone()['dis_back'] or 0.0)
 
-        pri_actual = pri_inv + pri_back
+        pri_actual = pri_inv + (0.0 if filter_date else pri_back)
 
         cursor.execute("""
             SELECT COALESCE(SUM(primary_target), 0) as pri_target 
             FROM dis_budget 
             WHERE MONTH(month) = %s OR month LIKE %s OR LOWER(month) = %s;
         """, (month_num, f"%-{month_num:02d}-%", selected_month))
-        pri_target = float(cursor.fetchone()['pri_target'] or 0.0)
+        monthly_pri_target = float(cursor.fetchone()['pri_target'] or 0.0)
+        pri_target = (monthly_pri_target / days_in_month) if filter_date else monthly_pri_target
 
         pri_pct = round((pri_actual / pri_target) * 100) if pri_target > 0 else 0
         pri_variance = pri_actual - pri_target
 
-        # 2. RD Sales Details (axienta_data.value for select month)
-        cursor.execute("""
-            SELECT COALESCE(SUM(value), 0) as rd_act 
-            FROM axienta_data 
-            WHERE MONTH(entry_date) = %s AND YEAR(entry_date) = %s;
-        """, (month_num, year))
+        # 2. RD Sales Details (axienta_data.value)
+        if filter_date:
+            cursor.execute("""
+                SELECT COALESCE(SUM(value), 0) as rd_act 
+                FROM axienta_data 
+                WHERE DATE(entry_date) = %s;
+            """, (filter_date,))
+        else:
+            cursor.execute("""
+                SELECT COALESCE(SUM(value), 0) as rd_act 
+                FROM axienta_data 
+                WHERE MONTH(entry_date) = %s AND YEAR(entry_date) = %s;
+            """, (month_num, year))
         rd_actual = float(cursor.fetchone()['rd_act'] or 0.0)
 
         cursor.execute("""
@@ -230,7 +289,8 @@ def get_dis_dashboard_fy_overview(month: Optional[str] = Query("july")):
             FROM dis_budget 
             WHERE MONTH(month) = %s OR month LIKE %s OR LOWER(month) = %s;
         """, (month_num, f"%-{month_num:02d}-%", selected_month))
-        rd_target = float(cursor.fetchone()['rd_target'] or 0.0)
+        monthly_rd_target = float(cursor.fetchone()['rd_target'] or 0.0)
+        rd_target = (monthly_rd_target / days_in_month) if filter_date else monthly_rd_target
 
         rd_pct = round((rd_actual / rd_target) * 100) if rd_target > 0 else 0
         rd_variance = rd_actual - rd_target
@@ -255,12 +315,16 @@ def get_dis_dashboard_fy_overview(month: Optional[str] = Query("july")):
         fy_rd_actual = float(cursor.fetchone()['fy_rd_act'] or 0.0)
         fy_rd_pct = round((fy_rd_actual / fy_rd_target) * 100) if fy_rd_target > 0 else 0
 
-        # 4. Monthly Breakdown for Quarter Charts (12 Months)
+        # 4. Monthly / Quarterly Breakdown
         monthly_breakdown = []
-        for m_key, m_code in MONTH_MAPPING.items():
-            m_yr = 2027 if m_code in [1, 2, 3] else 2026
-            
-            # Pri Act
+        ordered_months = [
+            ("april", 4, 2026), ("may", 5, 2026), ("june", 6, 2026),
+            ("july", 7, 2026), ("august", 8, 2026), ("september", 9, 2026),
+            ("october", 10, 2026), ("november", 11, 2026), ("december", 12, 2026),
+            ("january", 1, 2027), ("february", 2, 2027), ("march", 3, 2027)
+        ]
+
+        for m_key, m_code, m_yr in ordered_months:
             cursor.execute("""
                 SELECT COALESCE(SUM(net_dom_amount), 0) as inv 
                 FROM invoice_output 
@@ -271,7 +335,6 @@ def get_dis_dashboard_fy_overview(month: Optional[str] = Query("july")):
             m_pri_inv = float(cursor.fetchone()['inv'] or 0.0)
             m_pri_act = m_pri_inv + (pri_back if m_code == month_num else 0.0)
 
-            # Pri Tgt
             cursor.execute("""
                 SELECT COALESCE(SUM(primary_target), 0) as tgt 
                 FROM dis_budget 
@@ -279,7 +342,6 @@ def get_dis_dashboard_fy_overview(month: Optional[str] = Query("july")):
             """, (m_code, f"%-{m_code:02d}-%", m_key))
             m_pri_tgt = float(cursor.fetchone()['tgt'] or 0.0)
 
-            # RD Act
             cursor.execute("""
                 SELECT COALESCE(SUM(value), 0) as val 
                 FROM axienta_data 
@@ -287,7 +349,6 @@ def get_dis_dashboard_fy_overview(month: Optional[str] = Query("july")):
             """, (m_code, m_yr))
             m_rd_act = float(cursor.fetchone()['val'] or 0.0)
 
-            # RD Tgt
             cursor.execute("""
                 SELECT COALESCE(SUM(rd_target), 0) as tgt 
                 FROM dis_budget 
@@ -309,24 +370,23 @@ def get_dis_dashboard_fy_overview(month: Optional[str] = Query("july")):
 
     conn.close()
 
+    label_text = f"Date: {filter_date}" if filter_date else month_name
+
     return {
         "selected_month": selected_month,
-        "month_label": month_name,
+        "selected_date": filter_date,
+        "month_label": label_text,
         "primary_sales": {
             "actual": round(pri_actual, 2),
             "target": round(pri_target, 2),
             "pct": pri_pct,
             "variance": round(pri_variance, 2),
-            "actual_formula": f"Formula: invoice_output.NET_DOM_AMOUNT (LKR {pri_inv:,.2f}) + outstanding_output.backlog (LKR {pri_back:,.2f}) where cust_grp='DISTRI'",
-            "target_formula": f"Formula: SUM(primary_target) from dis_budget table for {month_name} = LKR {pri_target:,.2f}"
         },
         "rd_sales": {
             "actual": round(rd_actual, 2),
             "target": round(rd_target, 2),
             "pct": rd_pct,
             "variance": round(rd_variance, 2),
-            "actual_formula": f"Formula: SUM(value) from axienta_data table for {month_name} = LKR {rd_actual:,.2f}",
-            "target_formula": f"Formula: SUM(rd_target) from dis_budget table for {month_name} = LKR {rd_target:,.2f}"
         },
         "full_year": {
             "pri_target": round(fy_pri_target, 2),
@@ -342,15 +402,21 @@ def get_dis_dashboard_fy_overview(month: Optional[str] = Query("july")):
 
 # ─── DISTRI RANGE WISE FY API ENDPOINT ───
 @router.get("/distri-range-fy")
-def get_distri_range_fy(month: Optional[str] = Query("july")):
+def get_distri_range_fy(
+    month: Optional[str] = Query("july"),
+    date: Optional[str] = Query(None)
+):
     selected_month = month.lower().strip() if month and month.lower().strip() in MONTH_MAPPING else "july"
     month_num = MONTH_MAPPING[selected_month]
     month_name = MONTH_NAMES[selected_month]
     year = 2027 if month_num in [1, 2, 3] else 2026
 
+    _, days_in_month = calendar.monthrange(year, month_num)
+    filter_date = date.strip() if date and date.strip() else None
+
     conn = get_db_connection()
     with conn.cursor() as cursor:
-        # 1. Primary target & RD target from dis_budget for July
+        # 1. Primary target & RD target from dis_budget
         cursor.execute("""
             SELECT 
                 TRIM(product_id) as pid,
@@ -360,9 +426,18 @@ def get_distri_range_fy(month: Optional[str] = Query("july")):
             WHERE MONTH(month) = %s OR month LIKE %s OR LOWER(month) = %s
             GROUP BY TRIM(product_id);
         """, (month_num, f"%-{month_num:02d}-%", selected_month))
-        dis_budget_map = {r['pid']: r for r in cursor.fetchall()}
+        dis_budget_map = {}
+        for r in cursor.fetchall():
+            pid = r['pid']
+            m_pri = float(r['m_pri_tgt'] or 0.0)
+            m_rd = float(r['m_rd_tgt'] or 0.0)
+            dis_budget_map[pid] = {
+                'pid': pid,
+                'm_pri_tgt': (m_pri / days_in_month) if filter_date else m_pri,
+                'm_rd_tgt': (m_rd / days_in_month) if filter_date else m_rd
+            }
 
-        # 2. Cumulative Primary target & RD target from dis_budget (Apr to selected month)
+        # 2. Cumulative Primary target & RD target from dis_budget
         cursor.execute("""
             SELECT 
                 TRIM(product_id) as pid,
@@ -374,18 +449,28 @@ def get_distri_range_fy(month: Optional[str] = Query("july")):
         """, (month_num,))
         dis_budget_c_map = {r['pid']: r for r in cursor.fetchall()}
 
-        # 3. RD actual from axienta_data for July
-        cursor.execute("""
-            SELECT 
-                TRIM(product_id) as pid,
-                COALESCE(SUM(value), 0) as m_rd_act
-            FROM axienta_data
-            WHERE MONTH(entry_date) = %s AND YEAR(entry_date) = %s
-            GROUP BY TRIM(product_id);
-        """, (month_num, year))
+        # 3. RD actual from axienta_data
+        if filter_date:
+            cursor.execute("""
+                SELECT 
+                    TRIM(product_id) as pid,
+                    COALESCE(SUM(value), 0) as m_rd_act
+                FROM axienta_data
+                WHERE DATE(entry_date) = %s
+                GROUP BY TRIM(product_id);
+            """, (filter_date,))
+        else:
+            cursor.execute("""
+                SELECT 
+                    TRIM(product_id) as pid,
+                    COALESCE(SUM(value), 0) as m_rd_act
+                FROM axienta_data
+                WHERE MONTH(entry_date) = %s AND YEAR(entry_date) = %s
+                GROUP BY TRIM(product_id);
+            """, (month_num, year))
         axienta_m_map = {r['pid']: r['m_rd_act'] for r in cursor.fetchall()}
 
-        # 4. Cumulative RD actual from axienta_data (Apr to selected month)
+        # 4. Cumulative RD actual from axienta_data
         cursor.execute("""
             SELECT 
                 TRIM(product_id) as pid,
@@ -396,20 +481,32 @@ def get_distri_range_fy(month: Optional[str] = Query("july")):
         """, (month_num, year))
         axienta_c_map = {r['pid']: r['c_rd_act'] for r in cursor.fetchall()}
 
-        # 5. Primary actual from invoice_output for July
-        cursor.execute("""
-            SELECT 
-                TRIM(catalog_no) as pid,
-                COALESCE(SUM(net_dom_amount), 0) as m_inv
-            FROM invoice_output
-            WHERE MONTH(invoice_date) = %s AND YEAR(invoice_date) = %s
-              AND UPPER(TRIM(cust_grp)) = 'DISTRI'
-              AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL)
-            GROUP BY TRIM(catalog_no);
-        """, (month_num, year))
+        # 5. Primary actual from invoice_output
+        if filter_date:
+            cursor.execute("""
+                SELECT 
+                    TRIM(catalog_no) as pid,
+                    COALESCE(SUM(net_dom_amount), 0) as m_inv
+                FROM invoice_output
+                WHERE DATE(invoice_date) = %s
+                  AND UPPER(TRIM(cust_grp)) = 'DISTRI'
+                  AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL)
+                GROUP BY TRIM(catalog_no);
+            """, (filter_date,))
+        else:
+            cursor.execute("""
+                SELECT 
+                    TRIM(catalog_no) as pid,
+                    COALESCE(SUM(net_dom_amount), 0) as m_inv
+                FROM invoice_output
+                WHERE MONTH(invoice_date) = %s AND YEAR(invoice_date) = %s
+                  AND UPPER(TRIM(cust_grp)) = 'DISTRI'
+                  AND (UPPER(TRIM(contract)) != 'GSTEA' OR contract IS NULL)
+                GROUP BY TRIM(catalog_no);
+            """, (month_num, year))
         inv_m_map = {r['pid']: r['m_inv'] for r in cursor.fetchall()}
 
-        # 6. Cumulative Primary actual from invoice_output (Apr to selected month)
+        # 6. Cumulative Primary actual from invoice_output
         cursor.execute("""
             SELECT 
                 TRIM(catalog_no) as pid,
@@ -448,185 +545,129 @@ def get_distri_range_fy(month: Optional[str] = Query("july")):
         """)
         tb_items = cursor.fetchall()
 
-    conn.close()
+        # Build hierarchy tree
+        divisions = {}
+        for row in tb_items:
+            div_name = row['division_name']
+            sub_name = row['subgroup_name']
+            pno = row['part_no']
+            psku = row['product_sku']
 
-    # Build Nested 3-Level Tree: Division -> SubGroup -> Items
-    divisions_dict = {}
+            b_info = dis_budget_map.get(pno, {})
+            b_c_info = dis_budget_c_map.get(pno, {})
 
-    for item in tb_items:
-        div_name = item['division_name']
-        sub_name = item['subgroup_name']
-        pid = item['part_no']
-        sku = item['product_sku']
+            item_pri_tgt = float(b_info.get('m_pri_tgt', 0.0))
+            item_rd_tgt = float(b_info.get('m_rd_tgt', 0.0))
+            item_pri_act = float(inv_m_map.get(pno, 0.0)) + (0.0 if filter_date else float(back_map.get(pno, 0.0)))
+            item_rd_act = float(axienta_m_map.get(pno, 0.0))
 
-        m_b = dis_budget_map.get(pid, {})
-        c_b = dis_budget_c_map.get(pid, {})
+            item_c_pri_tgt = float(b_c_info.get('c_pri_tgt', 0.0))
+            item_c_rd_tgt = float(b_c_info.get('c_rd_tgt', 0.0))
+            item_c_pri_act = float(inv_c_map.get(pno, 0.0)) + float(back_map.get(pno, 0.0))
+            item_c_rd_act = float(axienta_c_map.get(pno, 0.0))
 
-        p_tgt = float(m_b.get('m_pri_tgt', 0.0))
-        rd_tgt = float(m_b.get('m_rd_tgt', 0.0))
+            item_obj = {
+                "part_no": pno,
+                "product_sku": psku,
+                "pri_target": round(item_pri_tgt, 2),
+                "pri_actual": round(item_pri_act, 2),
+                "rd_target": round(item_rd_tgt, 2),
+                "rd_actual": round(item_rd_act, 2),
+                "c_pri_target": round(item_c_pri_tgt, 2),
+                "c_pri_actual": round(item_c_pri_act, 2),
+                "c_rd_target": round(item_c_rd_tgt, 2),
+                "c_rd_actual": round(item_c_rd_act, 2)
+            }
 
-        c_p_tgt = float(c_b.get('c_pri_tgt', 0.0))
-        c_rd_tgt = float(c_b.get('c_rd_tgt', 0.0))
+            if div_name not in divisions:
+                divisions[div_name] = {}
+            if sub_name not in divisions[div_name]:
+                divisions[div_name][sub_name] = []
+            divisions[div_name][sub_name].append(item_obj)
 
-        p_act = float(inv_m_map.get(pid, 0.0)) + float(back_map.get(pid, 0.0))
-        rd_act = float(axienta_m_map.get(pid, 0.0))
+        tree = []
+        g_pri_tgt = g_pri_act = g_rd_tgt = g_rd_act = 0.0
+        g_c_pri_tgt = g_c_pri_act = g_c_rd_tgt = g_c_rd_act = 0.0
 
-        c_p_act = float(inv_c_map.get(pid, 0.0)) + float(back_map.get(pid, 0.0))
-        c_rd_act = float(axienta_c_map.get(pid, 0.0))
+        for div_name, subs in divisions.items():
+            div_pri_tgt = div_pri_act = div_rd_tgt = div_rd_act = 0.0
+            div_c_pri_tgt = div_c_pri_act = div_c_rd_tgt = div_c_rd_act = 0.0
+            sub_list = []
 
-        p_pct = round((p_act / p_tgt) * 100) if p_tgt > 0 else 0
-        rd_pct = round((rd_act / rd_tgt) * 100) if rd_tgt > 0 else 0
+            for sub_name, items in subs.items():
+                s_pri_tgt = sum(i['pri_target'] for i in items)
+                s_pri_act = sum(i['pri_actual'] for i in items)
+                s_rd_tgt = sum(i['rd_target'] for i in items)
+                s_rd_act = sum(i['rd_actual'] for i in items)
 
-        c_p_pct = round((c_p_act / c_p_tgt) * 100) if c_p_tgt > 0 else 0
-        c_rd_pct = round((c_rd_act / c_rd_tgt) * 100) if c_rd_tgt > 0 else 0
+                s_c_pri_tgt = sum(i['c_pri_target'] for i in items)
+                s_c_pri_act = sum(i['c_pri_actual'] for i in items)
+                s_c_rd_tgt = sum(i['c_rd_target'] for i in items)
+                s_c_rd_act = sum(i['c_rd_actual'] for i in items)
 
-        item_obj = {
-            "part_no": pid,
-            "product_sku": sku,
-            "p_tgt": round(p_tgt, 2),
-            "p_act": round(p_act, 2),
-            "p_pct": p_pct,
-            "rd_tgt": round(rd_tgt, 2),
-            "rd_act": round(rd_act, 2),
-            "rd_pct": rd_pct,
-            "c_p_tgt": round(c_p_tgt, 2),
-            "c_p_act": round(c_p_act, 2),
-            "c_p_pct": c_p_pct,
-            "c_rd_tgt": round(c_rd_tgt, 2),
-            "c_rd_act": round(c_rd_act, 2),
-            "c_rd_pct": c_rd_pct
-        }
+                sub_list.append({
+                    "subgroup_name": sub_name,
+                    "pri_target": round(s_pri_tgt, 2),
+                    "pri_actual": round(s_pri_act, 2),
+                    "rd_target": round(s_rd_tgt, 2),
+                    "rd_actual": round(s_rd_act, 2),
+                    "c_pri_target": round(s_c_pri_tgt, 2),
+                    "c_pri_actual": round(s_c_pri_act, 2),
+                    "c_rd_target": round(s_c_rd_tgt, 2),
+                    "c_rd_actual": round(s_c_rd_act, 2),
+                    "items": items
+                })
 
-        if div_name not in divisions_dict:
-            divisions_dict[div_name] = {}
-        if sub_name not in divisions_dict[div_name]:
-            divisions_dict[div_name][sub_name] = []
+                div_pri_tgt += s_pri_tgt
+                div_pri_act += s_pri_act
+                div_rd_tgt += s_rd_tgt
+                div_rd_act += s_rd_act
 
-        divisions_dict[div_name][sub_name].append(item_obj)
+                div_c_pri_tgt += s_c_pri_tgt
+                div_c_pri_act += s_c_pri_act
+                div_c_rd_tgt += s_c_rd_tgt
+                div_c_rd_act += s_c_rd_act
 
-    # Format Tree Structure with Aggregations
-    tree = []
-    div_idx = 1
-
-    g_p_tgt = 0.0
-    g_p_act = 0.0
-    g_rd_tgt = 0.0
-    g_rd_act = 0.0
-    g_c_p_tgt = 0.0
-    g_c_p_act = 0.0
-    g_c_rd_tgt = 0.0
-    g_c_rd_act = 0.0
-
-    for d_name, sub_map in divisions_dict.items():
-        d_p_tgt = 0.0
-        d_p_act = 0.0
-        d_rd_tgt = 0.0
-        d_rd_act = 0.0
-        d_c_p_tgt = 0.0
-        d_c_p_act = 0.0
-        d_c_rd_tgt = 0.0
-        d_c_rd_act = 0.0
-
-        subgroups_list = []
-
-        for s_name, items_list in sub_map.items():
-            s_p_tgt = sum(i['p_tgt'] for i in items_list)
-            s_p_act = sum(i['p_act'] for i in items_list)
-            s_rd_tgt = sum(i['rd_tgt'] for i in items_list)
-            s_rd_act = sum(i['rd_act'] for i in items_list)
-
-            s_c_p_tgt = sum(i['c_p_tgt'] for i in items_list)
-            s_c_p_act = sum(i['c_p_act'] for i in items_list)
-            s_c_rd_tgt = sum(i['c_rd_tgt'] for i in items_list)
-            s_c_rd_act = sum(i['c_rd_act'] for i in items_list)
-
-            s_p_pct = round((s_p_act / s_p_tgt) * 100) if s_p_tgt > 0 else 0
-            s_rd_pct = round((s_rd_act / s_rd_tgt) * 100) if s_rd_tgt > 0 else 0
-            s_c_p_pct = round((s_c_p_act / s_c_p_tgt) * 100) if s_c_p_tgt > 0 else 0
-            s_c_rd_pct = round((s_c_rd_act / s_c_rd_tgt) * 100) if s_c_rd_tgt > 0 else 0
-
-            subgroups_list.append({
-                "subgroup_name": s_name,
-                "p_tgt": round(s_p_tgt, 2),
-                "p_act": round(s_p_act, 2),
-                "p_pct": s_p_pct,
-                "rd_tgt": round(s_rd_tgt, 2),
-                "rd_act": round(s_rd_act, 2),
-                "rd_pct": s_rd_pct,
-                "c_p_tgt": round(s_c_p_tgt, 2),
-                "c_p_act": round(s_c_p_act, 2),
-                "c_p_pct": s_c_p_pct,
-                "c_rd_tgt": round(s_c_rd_tgt, 2),
-                "c_rd_act": round(s_c_rd_act, 2),
-                "c_rd_pct": s_c_rd_pct,
-                "items": items_list
+            tree.append({
+                "division_name": div_name,
+                "pri_target": round(div_pri_tgt, 2),
+                "pri_actual": round(div_pri_act, 2),
+                "rd_target": round(div_rd_tgt, 2),
+                "rd_actual": round(div_rd_act, 2),
+                "c_pri_target": round(div_c_pri_tgt, 2),
+                "c_pri_actual": round(div_c_pri_act, 2),
+                "c_rd_target": round(div_c_rd_tgt, 2),
+                "c_rd_actual": round(div_c_rd_act, 2),
+                "subgroups": sub_list
             })
 
-            d_p_tgt += s_p_tgt
-            d_p_act += s_p_act
-            d_rd_tgt += s_rd_tgt
-            d_rd_act += s_rd_act
-            d_c_p_tgt += s_c_p_tgt
-            d_c_p_act += s_c_p_act
-            d_c_rd_tgt += s_c_rd_tgt
-            d_c_rd_act += s_c_rd_act
+            g_pri_tgt += div_pri_tgt
+            g_pri_act += div_pri_act
+            g_rd_tgt += div_rd_tgt
+            g_rd_act += div_rd_act
 
-        d_p_pct = round((d_p_act / d_p_tgt) * 100) if d_p_tgt > 0 else 0
-        d_rd_pct = round((d_rd_act / d_rd_tgt) * 100) if d_rd_tgt > 0 else 0
-        d_c_p_pct = round((d_c_p_act / d_c_p_tgt) * 100) if d_c_p_tgt > 0 else 0
-        d_c_rd_pct = round((d_c_rd_act / d_c_rd_tgt) * 100) if d_c_rd_tgt > 0 else 0
+            g_c_pri_tgt += div_c_pri_tgt
+            g_c_pri_act += div_c_pri_act
+            g_c_rd_tgt += div_c_rd_tgt
+            g_c_rd_act += div_c_rd_act
 
-        tree.append({
-            "no": div_idx,
-            "division_name": d_name,
-            "p_tgt": round(d_p_tgt, 2),
-            "p_act": round(d_p_act, 2),
-            "p_pct": d_p_pct,
-            "rd_tgt": round(d_rd_tgt, 2),
-            "rd_act": round(d_rd_act, 2),
-            "rd_pct": d_rd_pct,
-            "c_p_tgt": round(d_c_p_tgt, 2),
-            "c_p_act": round(d_c_p_act, 2),
-            "c_p_pct": d_c_p_pct,
-            "c_rd_tgt": round(d_c_rd_tgt, 2),
-            "c_rd_act": round(d_c_rd_act, 2),
-            "c_rd_pct": d_c_rd_pct,
-            "subgroups": subgroups_list
-        })
+    conn.close()
 
-        div_idx += 1
-
-        g_p_tgt += d_p_tgt
-        g_p_act += d_p_act
-        g_rd_tgt += d_rd_tgt
-        g_rd_act += d_rd_act
-        g_c_p_tgt += d_c_p_tgt
-        g_c_p_act += d_c_p_act
-        g_c_rd_tgt += d_c_rd_tgt
-        g_c_rd_act += d_c_rd_act
-
-    g_p_pct = round((g_p_act / g_p_tgt) * 100) if g_p_tgt > 0 else 0
-    g_rd_pct = round((g_rd_act / g_rd_tgt) * 100) if g_rd_tgt > 0 else 0
-    g_c_p_pct = round((g_c_p_act / g_c_p_tgt) * 100) if g_c_p_tgt > 0 else 0
-    g_c_rd_pct = round((g_c_rd_act / g_c_rd_tgt) * 100) if g_c_rd_tgt > 0 else 0
+    label_text = f"Date: {filter_date}" if filter_date else month_name
 
     return {
         "selected_month": selected_month,
-        "month_label": month_name,
-        "total_divisions": len(tree),
+        "selected_date": filter_date,
+        "month_label": label_text,
         "grand_total": {
-            "p_tgt": round(g_p_tgt, 2),
-            "p_act": round(g_p_act, 2),
-            "p_pct": g_p_pct,
-            "rd_tgt": round(g_rd_tgt, 2),
-            "rd_act": round(g_rd_act, 2),
-            "rd_pct": g_rd_pct,
-            "c_p_tgt": round(g_c_p_tgt, 2),
-            "c_p_act": round(g_c_p_act, 2),
-            "c_p_pct": g_c_p_pct,
-            "c_rd_tgt": round(g_c_rd_tgt, 2),
-            "c_rd_act": round(g_c_rd_act, 2),
-            "c_rd_pct": g_c_rd_pct
+            "pri_target": round(g_pri_tgt, 2),
+            "pri_actual": round(g_pri_act, 2),
+            "rd_target": round(g_rd_tgt, 2),
+            "rd_actual": round(g_rd_act, 2),
+            "c_pri_target": round(g_c_pri_tgt, 2),
+            "c_pri_actual": round(g_c_pri_act, 2),
+            "c_rd_target": round(g_c_rd_tgt, 2),
+            "c_rd_actual": round(g_c_rd_act, 2)
         },
         "tree": tree
     }

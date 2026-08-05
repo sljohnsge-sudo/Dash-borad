@@ -1,21 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, PieChart, RefreshCw } from 'lucide-react';
+import { PieChart, RefreshCw } from 'lucide-react';
+import MonthCalendarBar from '../components/common/MonthCalendarBar';
 import api from '../services/api';
-
-const MONTH_TABS = [
-  { key: 'april', label: 'Apr-26' },
-  { key: 'may', label: 'May-26' },
-  { key: 'june', label: 'Jun-26' },
-  { key: 'july', label: 'Jul-26' },
-  { key: 'august', label: 'Aug-26' },
-  { key: 'september', label: 'Sep-26' },
-  { key: 'october', label: 'Oct-26' },
-  { key: 'november', label: 'Nov-26' },
-  { key: 'december', label: 'Dec-26' },
-  { key: 'january', label: 'Jan-27' },
-  { key: 'february', label: 'Feb-27' },
-  { key: 'march', label: 'Mar-27' },
-];
 
 const fmtMn = (val) => {
   if (val === undefined || val === null) return '0.0 M';
@@ -29,7 +15,7 @@ const fmtMnFull = (val) => {
   return Math.round(mn).toLocaleString('en-US') + ' M';
 };
 
-const CircularGauge = ({ percentage, variance, size = 120, activeColor = '#06b6d4' }) => {
+const CircularGauge = ({ percentage, variance, size = 110, activeColor = '#06b6d4' }) => {
   const strokeWidth = 10;
   const radius = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -82,15 +68,17 @@ const CircularGauge = ({ percentage, variance, size = 120, activeColor = '#06b6d
 
 const DisDashboardFyPage = () => {
   const [selectedMonth, setSelectedMonth] = useState('july');
+  const [selectedDate, setSelectedDate] = useState(null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const fetchDisDashboardData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/reports/dis-dashboard-fy-overview', {
-        params: { month: selectedMonth }
-      });
+      const params = { month: selectedMonth };
+      if (selectedDate) params.date = selectedDate;
+
+      const res = await api.get('/reports/dis-dashboard-fy-overview', { params });
       if (res.data) {
         setData(res.data);
       }
@@ -102,7 +90,7 @@ const DisDashboardFyPage = () => {
 
   useEffect(() => {
     fetchDisDashboardData();
-  }, [selectedMonth]);
+  }, [selectedMonth, selectedDate]);
 
   const pri = data?.primary_sales || { actual: 783909774.55, target: 80800000, pct: 970, variance: 703109774.55 };
   const rd = data?.rd_sales || { actual: 22494390.46, target: 80800000, pct: 28, variance: -58305609.54 };
@@ -132,40 +120,13 @@ const DisDashboardFyPage = () => {
         </button>
       </div>
 
-      {/* Month Selector Bar */}
-      <div className="glass-card" style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem', overflowX: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0 0.5rem', flexShrink: 0 }}>
-          <Calendar style={{ width: '18px', height: '18px', color: 'var(--gsh-red)' }} />
-          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>Month:</span>
-        </div>
-        {MONTH_TABS.map((tab) => {
-          const isActive = selectedMonth === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setSelectedMonth(tab.key)}
-              style={{
-                flex: 1,
-                minWidth: '78px',
-                padding: '0.5rem 0.55rem',
-                borderRadius: 'var(--radius-xs)',
-                border: isActive ? '1px solid var(--gsh-red)' : '1px solid var(--border-color)',
-                background: isActive ? 'var(--gsh-red)' : 'var(--bg-card)',
-                color: isActive ? '#ffffff' : 'var(--text-main)',
-                fontWeight: isActive ? 800 : 500,
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-                textAlign: 'center',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s ease-in-out',
-                boxShadow: isActive ? '0 2px 8px rgba(200,16,46,0.25)' : 'none'
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* ─── Interactive Month & Calendar Date Bar ─── */}
+      <MonthCalendarBar
+        selectedMonth={selectedMonth}
+        onSelectMonth={setSelectedMonth}
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+      />
 
       {/* 3-Column Dashboard Layout */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1.25rem', alignItems: 'stretch' }}>

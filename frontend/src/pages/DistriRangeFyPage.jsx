@@ -1,26 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, BarChart2, RefreshCw, Search, ChevronRight, ChevronDown, Layers, Box, Tag, PieChart } from 'lucide-react';
+import { BarChart2, RefreshCw, Search, ChevronRight, ChevronDown } from 'lucide-react';
+import MonthCalendarBar from '../components/common/MonthCalendarBar';
 import api from '../services/api';
-
-const MONTH_TABS = [
-  { key: 'april', label: 'Apr-26' },
-  { key: 'may', label: 'May-26' },
-  { key: 'june', label: 'Jun-26' },
-  { key: 'july', label: 'Jul-26' },
-  { key: 'august', label: 'Aug-26' },
-  { key: 'september', label: 'Sep-26' },
-  { key: 'october', label: 'Oct-26' },
-  { key: 'november', label: 'Nov-26' },
-  { key: 'december', label: 'Dec-26' },
-  { key: 'january', label: 'Jan-27' },
-  { key: 'february', label: 'Feb-27' },
-  { key: 'march', label: 'Mar-27' },
-];
 
 const fmt = (v) => (v || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
 const DistriRangeFyPage = () => {
   const [selectedMonth, setSelectedMonth] = useState('july');
+  const [selectedDate, setSelectedDate] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [treeData, setTreeData] = useState([]);
   const [grandTotal, setGrandTotal] = useState(null);
@@ -33,9 +20,10 @@ const DistriRangeFyPage = () => {
   const fetchDistriRangeData = async () => {
     setLoading(true);
     try {
-      const res = await api.get('/reports/distri-range-fy', {
-        params: { month: selectedMonth }
-      });
+      const params = { month: selectedMonth };
+      if (selectedDate) params.date = selectedDate;
+
+      const res = await api.get('/reports/distri-range-fy', { params });
       if (res.data) {
         setTreeData(res.data.tree || []);
         setGrandTotal(res.data.grand_total || null);
@@ -48,7 +36,7 @@ const DistriRangeFyPage = () => {
 
   useEffect(() => {
     fetchDistriRangeData();
-  }, [selectedMonth]);
+  }, [selectedMonth, selectedDate]);
 
   const toggleDivision = (divName) => {
     setExpandedDivisions(prev => ({
@@ -122,40 +110,13 @@ const DistriRangeFyPage = () => {
         </div>
       </div>
 
-      {/* Month Selector Bar */}
-      <div className="glass-card" style={{ padding: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem', overflowX: 'auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0 0.5rem', flexShrink: 0 }}>
-          <Calendar style={{ width: '18px', height: '18px', color: 'var(--gsh-red)' }} />
-          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-main)', whiteSpace: 'nowrap' }}>Month:</span>
-        </div>
-        {MONTH_TABS.map((tab) => {
-          const isActive = selectedMonth === tab.key;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setSelectedMonth(tab.key)}
-              style={{
-                flex: 1,
-                minWidth: '78px',
-                padding: '0.5rem 0.55rem',
-                borderRadius: 'var(--radius-xs)',
-                border: isActive ? '1px solid var(--gsh-red)' : '1px solid var(--border-color)',
-                background: isActive ? 'var(--gsh-red)' : 'var(--bg-card)',
-                color: isActive ? '#ffffff' : 'var(--text-main)',
-                fontWeight: isActive ? 800 : 500,
-                fontSize: '0.8rem',
-                cursor: 'pointer',
-                textAlign: 'center',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s ease-in-out',
-                boxShadow: isActive ? '0 2px 8px rgba(200,16,46,0.25)' : 'none'
-              }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
-      </div>
+      {/* ─── Interactive Month & Calendar Date Bar ─── */}
+      <MonthCalendarBar
+        selectedMonth={selectedMonth}
+        onSelectMonth={setSelectedMonth}
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+      />
 
       {/* Search Bar */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
